@@ -29,12 +29,16 @@ jobs:
         run: pytest
       - name: Export OpenAPI schema
         run: python scripts/export_openapi.py
+      # Only on a real push to main: pull_request builds check out a detached
+      # HEAD (refs/pull/N/merge), so there is no branch to push back to.
       - name: Commit OpenAPI schema
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           git config user.name "GitHub Actions"
           git config user.email "ci@github.com"
           git add openapi.yaml
-          git commit -m "Update OpenAPI schema" || echo "No changes to commit"
+          git diff --cached --quiet && { echo "No changes to commit"; exit 0; }
+          git commit -m "Update OpenAPI schema"
           git push
 
 
