@@ -16,6 +16,8 @@ from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from physense_utils.grids import Grid1D, Grid3D
 from physense_qm import QuantumSystem1D
 from physense_qm.wavepacket import GaussianWavepacket
+from physense_qm.potentials import RectangularBarrier
+from physense_qm.scattering import energy_averaged_transmission
 from physense_qm.orbitals import SingleAtomState
 from physense_api.schemas.qm import (
     EigenstatesRequest,
@@ -112,12 +114,21 @@ async def evolve(websocket: WebSocket) -> None:
             sigma=req.wavepacket.sigma,
         )
 
+        predicted_transmission = None
+        mean_energy_transmission = None
+        if isinstance(potential, RectangularBarrier):
+            predicted_transmission = energy_averaged_transmission(potential, wavepacket)
+            mean_energy = 0.5 * wavepacket.k0**2
+            mean_energy_transmission = potential.transmission_coefficient(mean_energy)
+
         # Send metadata first so frontend can set up the canvas
         metadata = EvolveMetadata(
             x=grid.x.tolist(),
             potential=potential(grid.x).tolist(),
             t_max=req.t_max,
             n_frames=req.n_frames,
+            predicted_transmission=predicted_transmission,
+            mean_energy_transmission=mean_energy_transmission,
         )
         await websocket.send_text(json.dumps({"type": "metadata", **metadata.model_dump()}))
 

@@ -204,6 +204,23 @@ class EvolveMetadata(BaseModel):
     potential: list[float]
     t_max: float
     n_frames: int
+    predicted_transmission: float | None = Field(
+        default=None,
+        description=(
+            "Energy-averaged transmission for a barrier potential: the "
+            "integral of |phi(k)|^2 * T(E(k)) dk over the wavepacket's "
+            "momentum distribution. None for non-barrier potentials."
+        ),
+    )
+    mean_energy_transmission: float | None = Field(
+        default=None,
+        description=(
+            "T evaluated at a single energy, E = k0^2/2 -- the naive "
+            "prediction a plane wave at the wavepacket's mean momentum "
+            "would give, for comparison against predicted_transmission. "
+            "None for non-barrier potentials."
+        ),
+    )
 
 
 __all__ = [
