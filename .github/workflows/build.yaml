@@ -47,6 +47,9 @@ jobs:
     runs-on: ubuntu-latest
     name: Build package
     needs: test
+    # Only publish images for main and release tags -- pull requests just run
+    # the tests; there's nothing to deploy from a branch.
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     permissions:
       contents: read
       packages: write
