@@ -195,3 +195,46 @@ class TestEvolveWebSocket:
             assert len(frames) >= 10
             assert all("probability_density" in f for f in frames)
             assert all(abs(f["norm"] - 1.0) < 0.05 for f in frames)
+
+    def test_predicted_transmission_for_barrier(self, client):
+        with client.websocket_connect("/qm/evolve") as ws:
+            ws.send_text(json.dumps({
+                "grid": {"x_min": -20, "x_max": 20, "n_points": 256},
+                "potential": {"type": "barrier", "params": {"height": 5.0, "width": 1.0}},
+                "wavepacket": {"x0": -8.0, "k0": 2.0, "sigma": 1.0},
+                "t_max": 1.0,
+                "dt": 0.01,
+                "n_frames": 10,
+            }))
+            msg = json.loads(ws.receive_text())
+            assert msg["type"] == "metadata"
+            assert msg["predicted_transmission"] is not None
+            assert 0.0 < msg["predicted_transmission"] < 1.0
+            assert msg["mean_energy_transmission"] is not None
+            assert 0.0 < msg["mean_energy_transmission"] < 1.0
+            # T(E) is convex in the tunnelling regime, so the energy-averaged
+            # prediction should exceed T at a single mean energy (Jensen's
+            # inequality) -- see physense_qm's scattering tests.
+            assert msg["predicted_transmission"] > msg["mean_energy_transmission"]
+
+            # Drain the rest of the stream
+            while json.loads(ws.receive_text())["type"] != "done":
+                pass
+
+    def test_predicted_transmission_none_for_non_barrier(self, client):
+        with client.websocket_connect("/qm/evolve") as ws:
+            ws.send_text(json.dumps({
+                "grid": {"x_min": -20, "x_max": 20, "n_points": 256},
+                "potential": {"type": "harmonic", "params": {"omega": 1.0}},
+                "wavepacket": {"x0": -8.0, "k0": 1.5, "sigma": 1.5},
+                "t_max": 1.0,
+                "dt": 0.01,
+                "n_frames": 10,
+            }))
+            msg = json.loads(ws.receive_text())
+            assert msg["type"] == "metadata"
+            assert msg["predicted_transmission"] is None
+            assert msg["mean_energy_transmission"] is None
+
+            while json.loads(ws.receive_text())["type"] != "done":
+                pass
