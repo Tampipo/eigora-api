@@ -13,7 +13,8 @@ Interactive docs: **https://api.physense.tampipo.fr/docs**
 src/physense_api/
   main.py              # FastAPI app, CORS, lifespan
   routers/
-    qm.py              # /qm/eigenstates (POST), /qm/evolve (WebSocket)
+    qm.py              # /qm/eigenstates, /qm/separable-state,
+                       # /qm/single-atom-state (POST), /qm/evolve (WebSocket)
   schemas/
     qm.py              # Pydantic request/response models
   utils/
@@ -89,6 +90,49 @@ Solves the time-independent Schrödinger equation and returns eigenstates.
   "energies": [0.5, 1.5, 2.5, 3.5, 4.5],
   "wavefunctions": [[...], [...], ...],
   "n_states": 5
+}
+```
+
+---
+
+### `POST /qm/separable-state`
+
+Returns one eigenstate of a system that separates along x and y — a particle in
+a well in both directions, a 2D trap, or any pair of 1D potentials. Each axis is
+solved analytically when its potential has a known solution (`harmonic`,
+`infinite_well`) and numerically otherwise.
+
+**Request:**
+
+```json
+{
+  "grid": { "x_min": 0, "x_max": 6, "y_min": 0, "y_max": 3, "nx": 128, "ny": 128 },
+  "potential_x": { "type": "infinite_well", "params": { "width": 6.0, "x0": 3.0 } },
+  "potential_y": { "type": "infinite_well", "params": { "width": 3.0, "x0": 1.5 } },
+  "n1": 2,
+  "n2": 3,
+  "n_states": 20
+}
+```
+
+`n1` and `n2` are **positions in the ascending list of states**, 0 being the
+ground state — not the physical quantum numbers, which differ per potential (a
+box starts at n=1, an oscillator at n=0) and come back in `label`.
+
+**Response:** the state as its two 1D factors, so the payload grows like
+`nx + ny` rather than `nx * ny`. Rebuild the field with an outer product:
+`psi[i][j] = psi_x[i] * psi_y[j]`.
+
+```json
+{
+  "x": [...], "y": [...],
+  "psi_x": [...], "psi_y": [...],
+  "potential_x": [...], "potential_y": [...],
+  "energy": 10.0067, "energy_x": 1.2337, "energy_y": 8.773,
+  "label": [3, 4],
+  "quantum_numbers": ["n_1", "n_2"],
+  "degeneracy": 1,
+  "is_exact": true
 }
 ```
 

@@ -112,6 +112,152 @@ class TestEigenstates:
         assert resp.status_code == 422
 
 
+class TestSeparableState:
+    # A square 2D box, wide enough that both axes are the same well.
+    SQUARE_BOX = {"type": "infinite_well", "params": {"width": 4.0, "x0": 0.0}}
+    HARMONIC = {"type": "harmonic", "params": {"omega": 1.0}}
+
+    @staticmethod
+    def body(**overrides):
+        request = {
+            "grid": {"x_min": -4, "x_max": 4, "y_min": -4, "y_max": 4,
+                     "nx": 128, "ny": 128},
+            "potential_x": TestSeparableState.SQUARE_BOX,
+            "potential_y": TestSeparableState.SQUARE_BOX,
+        }
+        request.update(overrides)
+        return request
+
+    async def test_box_in_two_directions(self, async_client):
+        # A well of width 6 along x and 3 along y, third state along x and
+        # fourth along y: 3 lobes across, 4 up.
+        async with async_client as c:
+            resp = await c.post("/qm/separable-state", json={
+                "grid": {"x_min": 0, "x_max": 6, "y_min": 0, "y_max": 3,
+                         "nx": 128, "ny": 128},
+                "potential_x": {"type": "infinite_well",
+                                "params": {"width": 6.0, "x0": 3.0}},
+                "potential_y": {"type": "infinite_well",
+                                "params": {"width": 3.0, "x0": 1.5}},
+                "n1": 2, "n2": 3,
+            })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["label"] == [3, 4]          # box quantum numbers start at 1
+        assert data["quantum_numbers"] == ["n_1", "n_2"]
+        assert data["is_exact"] is True
+        assert len(data["x"]) == 128
+        assert len(data["psi_x"]) == 128
+        # E = n1^2 pi^2 / 2 L_x^2 + n2^2 pi^2 / 2 L_y^2
+        assert data["energy_x"] == pytest.approx(9 * np.pi**2 / (2 * 36))
+        assert data["energy_y"] == pytest.approx(16 * np.pi**2 / (2 * 9))
+        assert data["energy"] == pytest.approx(data["energy_x"] + data["energy_y"])
+
+    async def test_factors_reconstruct_a_normalised_field(self, async_client):
+        async with async_client as c:
+            resp = await c.post("/qm/separable-state", json=self.body(n1=1, n2=2))
+        data = resp.json()
+        psi = np.outer(data["psi_x"], data["psi_y"])
+        dx = data["x"][1] - data["x"][0]
+        dy = data["y"][1] - data["y"][0]
+        assert np.sum(psi**2) * dx * dy == pytest.approx(1.0, abs=1e-3)
+
+    async def test_ground_state_has_no_nodes(self, async_client):
+        async with async_client as c:
+            resp = await c.post("/qm/separable-state", json=self.body(n1=0, n2=0))
+        data = resp.json()
+        inside = np.array(data["psi_x"])[np.abs(data["x"]) < 1.9]
+        assert np.all(inside > 0) or np.all(inside < 0)
+
+    async def test_square_box_degeneracy(self, async_client):
+        async with async_client as c:
+            degenerate = await c.post("/qm/separable-state", json=self.body(n1=0, n2=1))
+            ground = await c.post("/qm/separable-state", json=self.body(n1=0, n2=0))
+        assert degenerate.json()["degeneracy"] == 2   # (1,2) and (2,1)
+        assert ground.json()["degeneracy"] == 1
+
+    async def test_isotropic_trap_degeneracy(self, async_client):
+        async with async_client as c:
+            resp = await c.post("/qm/separable-state", json=self.body(
+                potential_x=self.HARMONIC, potential_y=self.HARMONIC, n1=1, n2=1,
+            ))
+        data = resp.json()
+        assert data["energy"] == pytest.approx(3.0)   # (1+1/2) + (1+1/2)
+        assert data["degeneracy"] == 3                # level n=2 of a 2D trap
+
+    async def test_axes_may_differ(self, async_client):
+        async with async_client as c:
+            resp = await c.post("/qm/separable-state", json=self.body(
+                potential_x=self.HARMONIC,
+                potential_y={"type": "harmonic", "params": {"omega": 2.0}},
+                n1=0, n2=0,
+            ))
+        data = resp.json()
+        assert data["energy"] == pytest.approx(0.5 + 1.0)
+        assert data["degeneracy"] == 1
+
+    async def test_numerical_axis_is_not_exact(self, async_client):
+        # A finite well has no analytic spectrum, so that axis is solved on the grid.
+        async with async_client as c:
+            resp = await c.post("/qm/separable-state", json=self.body(
+                potential_x=self.HARMONIC,
+                potential_y={"type": "finite_well",
+                             "params": {"depth": 10.0, "width": 3.0}},
+                n1=0, n2=1, n_states=5,
+            ))
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["is_exact"] is False
+        assert data["label"] == [0, 1]   # numerical states are 0-indexed
+
+    async def test_state_index_beyond_what_was_computed(self, async_client):
+        async with async_client as c:
+            resp = await c.post("/qm/separable-state", json=self.body(
+                potential_x=self.HARMONIC,
+                potential_y={"type": "finite_well",
+                             "params": {"depth": 10.0, "width": 3.0}},
+                n1=0, n2=40, n_states=5,
+            ))
+        assert resp.status_code == 422
+        assert "out of range" in resp.json()["detail"]
+
+    async def test_custom_potential_on_one_axis(self, async_client):
+        # Option B: a custom V(x) that happens to be a harmonic well, so the
+        # numerically solved axis must reproduce the analytic one on y.
+        values = (0.5 * np.linspace(-4, 4, 128) ** 2).tolist()
+        async with async_client as c:
+            resp = await c.post("/qm/separable-state", json=self.body(
+                potential_x={"type": "custom", "values": values},
+                potential_y=self.HARMONIC,
+                n1=1, n2=0, n_states=6,
+            ))
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["is_exact"] is False
+        assert data["energy_x"] == pytest.approx(1.5, abs=1e-2)
+        assert data["energy_y"] == pytest.approx(0.5)
+
+    async def test_custom_potential_size_is_validated(self, async_client):
+        async with async_client as c:
+            resp = await c.post("/qm/separable-state", json=self.body(
+                potential_x={"type": "custom", "values": [0.0] * 7},
+            ))
+        assert resp.status_code == 422
+
+    async def test_invalid_grid(self, async_client):
+        async with async_client as c:
+            resp = await c.post("/qm/separable-state", json=self.body(
+                grid={"x_min": 4, "x_max": -4, "y_min": -4, "y_max": 4,
+                      "nx": 128, "ny": 128},
+            ))
+        assert resp.status_code == 422
+
+    async def test_negative_state_index(self, async_client):
+        async with async_client as c:
+            resp = await c.post("/qm/separable-state", json=self.body(n1=-1))
+        assert resp.status_code == 422
+
+
 class TestSingleAtomState:
     async def test_hydrogen_1s(self, async_client):
         # 1s is nodeless and everywhere positive: a single +ψ lobe, no −ψ lobe.
