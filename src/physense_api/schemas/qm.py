@@ -141,6 +141,66 @@ class EigenstatesResponse(BaseModel):
     wavefunctions: list[list[float]]  # shape: (n_states, n_points)
     n_states: int
 
+# ── Separable 2D states ───────────────────────────────────────────────────────
+
+class SeparableStateRequest(BaseModel):
+    """
+    One eigenstate of a system that separates along x and y.
+
+    The potential is given per axis, so a 2D well is `infinite_well` on both
+    axes, an anisotropic trap is `harmonic` on both with different omega, and
+    the two axes may differ freely.
+    """
+
+    grid: Grid2DSchema = Field(default_factory=Grid2DSchema)
+    potential_x: PotentialSchema
+    potential_y: PotentialSchema
+    n1: int = Field(
+        default=0,
+        ge=0,
+        le=99,
+        description=(
+            "Index of the state along x, 0 being the ground state. This is a "
+            "position in the ascending list of states, not the physical "
+            "quantum number -- those differ per potential (a box starts at "
+            "n=1, an oscillator at n=0) and are returned in `label`."
+        ),
+    )
+    n2: int = Field(default=0, ge=0, le=99, description="Index of the state along y.")
+    n_states: int = Field(
+        default=20,
+        ge=1,
+        le=100,
+        description="States computed per axis that has no analytic solution.",
+    )
+
+
+class SeparableStateResponse(BaseModel):
+    """
+    The state as its two one-dimensional factors: psi(x, y) = psi_x(x) * psi_y(y).
+
+    Sending the factors rather than the (nx, ny) field keeps the payload
+    proportional to nx + ny instead of nx * ny; the client reconstructs the
+    field with an outer product.
+    """
+
+    x: list[float]
+    y: list[float]
+    psi_x: list[float] = Field(description="Normalised factor along x")
+    psi_y: list[float] = Field(description="Normalised factor along y")
+    potential_x: list[float] = Field(description="V(x) sampled on the x axis")
+    potential_y: list[float] = Field(description="V(y) sampled on the y axis")
+    energy: float
+    energy_x: float
+    energy_y: float
+    label: list[int] = Field(description="Physical quantum numbers of the state")
+    quantum_numbers: list[str] = Field(description="Names of those quantum numbers")
+    degeneracy: int = Field(description="How many states share this energy")
+    is_exact: bool = Field(
+        description="False if either axis had to be solved numerically"
+    )
+
+
 class SingleAtomStateRequest(BaseModel):
     grid: Grid3DSchema = Field(default_factory=Grid3DSchema)
     Z: int = Field(default=1, ge=1, le=100, description="Atomic number")
@@ -225,10 +285,14 @@ class EvolveMetadata(BaseModel):
 
 __all__ = [
     "GridSchema",
+    "Grid2DSchema",
+    "Grid3DSchema",
     "PotentialType",
     "PotentialSchema",
     "EigenstatesRequest",
     "EigenstatesResponse",
+    "SeparableStateRequest",
+    "SeparableStateResponse",
     "WavepacketSchema",
     "EvolveRequest",
     "EvolveFrame",

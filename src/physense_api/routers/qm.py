@@ -16,8 +16,9 @@ from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from physense_utils.grids import GridND
 from physense_qm import QuantumSystem1D
 from physense_qm.states.wavepacket import GaussianWavepacket
-from physense_qm.potentials import RectangularBarrier
+from physense_qm.potentials import RectangularBarrier, SeparablePotential
 from physense_qm.scattering import energy_averaged_transmission
+from physense_qm.spectra import spectrum_for
 from physense_qm.states.orbitals import SingleAtomState
 from physense_api.schemas.qm import (
     EigenstatesRequest,
@@ -25,6 +26,8 @@ from physense_api.schemas.qm import (
     EvolveRequest,
     EvolveFrame,
     EvolveMetadata,
+    SeparableStateRequest,
+    SeparableStateResponse,
     SingleAtomStateResponse,
     SingleAtomStateRequest,
 )
@@ -56,6 +59,69 @@ def eigenstates(req: EigenstatesRequest) -> EigenstatesResponse:
         wavefunctions=[psi.tolist() for psi in sol.wavefunctions],
         n_states=sol.n_states,
     )
+
+@router.post("/separable-state", response_model=SeparableStateResponse)
+def separable_state(req: SeparableStateRequest) -> SeparableStateResponse:
+    """
+    One eigenstate of a system that separates along x and y.
+
+    The potential is given per axis, so `infinite_well` on both axes is a
+    particle in a 2D box, `harmonic` on both is a 2D trap, and the axes may
+    differ. Each axis is solved analytically when its potential has a known
+    solution and numerically otherwise; the state is the product of the two.
+    """
+    grid = GridND.uniform(
+        bounds=[
+            (req.grid.x_min, req.grid.x_max),
+            (req.grid.y_min, req.grid.y_max),
+        ],
+        shape=(req.grid.nx, req.grid.ny),
+    )
+    x_grid, y_grid = grid.sub(0, 1), grid.sub(1, 2)
+
+    try:
+        potential_x = build_potential(req.potential_x, x_grid)
+        potential_y = build_potential(req.potential_y, y_grid)
+        spectrum = spectrum_for(
+            SeparablePotential([potential_x, potential_y]),
+            grid=grid,
+            n_states=req.n_states,
+        )
+        label_x = _state_at(spectrum.blocks[0], req.n1, "n1")
+        label_y = _state_at(spectrum.blocks[1], req.n2, "n2")
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    x, y = x_grid.x, y_grid.x
+    label = label_x + label_y
+
+    return SeparableStateResponse(
+        x=x.tolist(),
+        y=y.tolist(),
+        psi_x=spectrum.blocks[0].wavefunction(label_x)(x).tolist(),
+        psi_y=spectrum.blocks[1].wavefunction(label_y)(y).tolist(),
+        potential_x=np.asarray(potential_x(x)).tolist(),
+        potential_y=np.asarray(potential_y(y)).tolist(),
+        energy=spectrum.energy(label),
+        energy_x=spectrum.blocks[0].energy(label_x),
+        energy_y=spectrum.blocks[1].energy(label_y),
+        label=list(label),
+        quantum_numbers=list(spectrum.quantum_numbers),
+        degeneracy=spectrum.degeneracy(label),
+        is_exact=spectrum.is_exact,
+    )
+
+
+def _state_at(block, index: int, field: str) -> tuple[int, ...]:
+    """The block's `index`-th state, as physical quantum numbers."""
+    states = block.states(index + 1)
+    if index >= len(states):
+        raise ValueError(
+            f"{field}={index} is out of range: only {len(states)} state(s) "
+            f"are available on that axis"
+        )
+    return states[index]
+
 
 @router.post("/single-atom-state", response_model=SingleAtomStateResponse)
 def single_atom_state(req: SingleAtomStateRequest) -> SingleAtomStateResponse:
