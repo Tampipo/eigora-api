@@ -34,6 +34,41 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /qm/separable-state:
+    post:
+      tags:
+      - Quantum Mechanics
+      summary: Separable State
+      description: 'One eigenstate of a system that separates along x and y.
+
+
+        The potential is given per axis, so `infinite_well` on both axes is a
+
+        particle in a 2D box, `harmonic` on both is a 2D trap, and the axes may
+
+        differ. Each axis is solved analytically when its potential has a known
+
+        solution and numerically otherwise; the state is the product of the two.'
+      operationId: separable_state_qm_separable_state_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SeparableStateRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SeparableStateResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /qm/single-atom-state:
     post:
       tags:
@@ -168,6 +203,38 @@ components:
           default: 0.0
       type: object
       title: FiniteWellParams
+    Grid2DSchema:
+      properties:
+        x_min:
+          type: number
+          title: X Min
+          default: -10.0
+        x_max:
+          type: number
+          title: X Max
+          default: 10.0
+        y_min:
+          type: number
+          title: Y Min
+          default: -10.0
+        y_max:
+          type: number
+          title: Y Max
+          default: 10.0
+        nx:
+          type: integer
+          maximum: 2048.0
+          minimum: 64.0
+          title: Nx
+          default: 512
+        ny:
+          type: integer
+          maximum: 2048.0
+          minimum: 64.0
+          title: Ny
+          default: 512
+      type: object
+      title: Grid2DSchema
     Grid3DSchema:
       properties:
         x_min:
@@ -338,6 +405,141 @@ components:
       - free
       - custom
       title: PotentialType
+    SeparableStateRequest:
+      properties:
+        grid:
+          $ref: '#/components/schemas/Grid2DSchema'
+        potential_x:
+          $ref: '#/components/schemas/PotentialSchema'
+        potential_y:
+          $ref: '#/components/schemas/PotentialSchema'
+        n1:
+          type: integer
+          maximum: 99.0
+          minimum: 0.0
+          title: N1
+          description: Index of the state along x, 0 being the ground state. This
+            is a position in the ascending list of states, not the physical quantum
+            number -- those differ per potential (a box starts at n=1, an oscillator
+            at n=0) and are returned in `label`.
+          default: 0
+        n2:
+          type: integer
+          maximum: 99.0
+          minimum: 0.0
+          title: N2
+          description: Index of the state along y.
+          default: 0
+        n_states:
+          type: integer
+          maximum: 100.0
+          minimum: 1.0
+          title: N States
+          description: States computed per axis that has no analytic solution.
+          default: 20
+      type: object
+      required:
+      - potential_x
+      - potential_y
+      title: SeparableStateRequest
+      description: 'One eigenstate of a system that separates along x and y.
+
+
+        The potential is given per axis, so a 2D well is `infinite_well` on both
+
+        axes, an anisotropic trap is `harmonic` on both with different omega, and
+
+        the two axes may differ freely.'
+    SeparableStateResponse:
+      properties:
+        x:
+          items:
+            type: number
+          type: array
+          title: X
+        y:
+          items:
+            type: number
+          type: array
+          title: Y
+        psi_x:
+          items:
+            type: number
+          type: array
+          title: Psi X
+          description: Normalised factor along x
+        psi_y:
+          items:
+            type: number
+          type: array
+          title: Psi Y
+          description: Normalised factor along y
+        potential_x:
+          items:
+            type: number
+          type: array
+          title: Potential X
+          description: V(x) sampled on the x axis
+        potential_y:
+          items:
+            type: number
+          type: array
+          title: Potential Y
+          description: V(y) sampled on the y axis
+        energy:
+          type: number
+          title: Energy
+        energy_x:
+          type: number
+          title: Energy X
+        energy_y:
+          type: number
+          title: Energy Y
+        label:
+          items:
+            type: integer
+          type: array
+          title: Label
+          description: Physical quantum numbers of the state
+        quantum_numbers:
+          items:
+            type: string
+          type: array
+          title: Quantum Numbers
+          description: Names of those quantum numbers
+        degeneracy:
+          type: integer
+          title: Degeneracy
+          description: How many states share this energy
+        is_exact:
+          type: boolean
+          title: Is Exact
+          description: False if either axis had to be solved numerically
+      type: object
+      required:
+      - x
+      - y
+      - psi_x
+      - psi_y
+      - potential_x
+      - potential_y
+      - energy
+      - energy_x
+      - energy_y
+      - label
+      - quantum_numbers
+      - degeneracy
+      - is_exact
+      title: SeparableStateResponse
+      description: 'The state as its two one-dimensional factors: psi(x, y) = psi_x(x)
+        * psi_y(y).
+
+
+        Sending the factors rather than the (nx, ny) field keeps the payload
+
+        proportional to nx + ny instead of nx * ny; the client reconstructs the
+
+        field with an outer product.'
     SingleAtomStateRequest:
       properties:
         grid:
