@@ -18,7 +18,7 @@ from physense_qm.potentials import (
     PotentialStep,
     DoubleWell,
 )
-from physense_utils.grids import Grid1D
+from physense_utils.grids import GridND
 
 from physense_api.schemas.qm import PotentialSchema, PotentialType
 
@@ -38,14 +38,14 @@ class CustomPotential(Potential):
         return self._values
 
 
-def build_potential(schema: PotentialSchema, grid: Grid1D) -> Potential:
+def build_potential(schema: PotentialSchema, grid: GridND) -> Potential:
     """
     Construct a physense_qm Potential from a PotentialSchema.
 
     Parameters
     ----------
     schema : PotentialSchema
-    grid : Grid1D
+    grid : GridND
         Needed to validate custom potential size.
 
     Returns

@@ -13,7 +13,7 @@ import json
 import numpy as np
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
-from physense_utils.grids import Grid1D, Grid3D
+from physense_utils.grids import GridND
 from physense_qm import QuantumSystem1D
 from physense_qm.wavepacket import GaussianWavepacket
 from physense_qm.potentials import RectangularBarrier
@@ -41,7 +41,7 @@ def eigenstates(req: EigenstatesRequest) -> EigenstatesResponse:
 
     Accepts either a named potential (Option A) or a custom V(x) array (Option B).
     """
-    grid = Grid1D(x_min=req.grid.x_min, x_max=req.grid.x_max, n_points=req.grid.n_points)
+    grid = GridND.line(req.grid.x_min, req.grid.x_max, req.grid.n_points)
     try:
         potential = build_potential(req.potential, grid)
     except ValueError as e:
@@ -64,10 +64,14 @@ def single_atom_state(req: SingleAtomStateRequest) -> SingleAtomStateResponse:
 
     Accepts either a named potential (Option A) or a custom V(x) array (Option B).
     """
-    grid = Grid3D(x_min=req.grid.x_min, x_max=req.grid.x_max, 
-                  y_min=req.grid.y_min, y_max=req.grid.y_max,
-                    z_min=req.grid.z_min, z_max=req.grid.z_max,
-                    nx=req.grid.nx, ny=req.grid.ny, nz=req.grid.nz)
+    grid = GridND.uniform(
+        bounds=[
+            (req.grid.x_min, req.grid.x_max),
+            (req.grid.y_min, req.grid.y_max),
+            (req.grid.z_min, req.grid.z_max),
+        ],
+        shape=(req.grid.nx, req.grid.ny, req.grid.nz),
+    )
 
     try:
         atom_state = SingleAtomState(Z=req.Z, n=req.n, l=req.l, m=req.m)
@@ -75,7 +79,7 @@ def single_atom_state(req: SingleAtomStateRequest) -> SingleAtomStateResponse:
         raise HTTPException(status_code=422, detail=str(e))
     psi_values = np.asarray(atom_state.wavefunction_on_grid(grid))
 
-    mesh = build_orbital_mesh(psi_values, grid.x, grid.y, grid.z)
+    mesh = build_orbital_mesh(psi_values, grid.values(0), grid.values(1), grid.values(2))
 
     return SingleAtomStateResponse(
         positive=mesh["positive"],
@@ -104,7 +108,7 @@ async def evolve(websocket: WebSocket) -> None:
         data = await websocket.receive_text()
         req = EvolveRequest.model_validate_json(data)
 
-        grid = Grid1D(x_min=req.grid.x_min, x_max=req.grid.x_max, n_points=req.grid.n_points)
+        grid = GridND.line(req.grid.x_min, req.grid.x_max, req.grid.n_points)
         potential = build_potential(req.potential, grid)
         system = QuantumSystem1D(grid=grid, potential=potential)
 
