@@ -15,10 +15,10 @@ from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
 from physense_utils.grids import GridND
 from physense_qm import QuantumSystem1D
-from physense_qm.wavepacket import GaussianWavepacket
+from physense_qm.states.wavepacket import GaussianWavepacket
 from physense_qm.potentials import RectangularBarrier
 from physense_qm.scattering import energy_averaged_transmission
-from physense_qm.orbitals import SingleAtomState
+from physense_qm.states.orbitals import SingleAtomState
 from physense_api.schemas.qm import (
     EigenstatesRequest,
     EigenstatesResponse,
