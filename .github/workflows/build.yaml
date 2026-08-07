@@ -123,5 +123,5 @@ jobs:
           git diff --quiet && { echo "no image change"; exit 0; }
           git config user.name "github-actions[bot]" 
           git config user.email "github-actions[bot]@users.noreply.github.com" 
-          git commit -am "deploy: tarot images ${TAG}"
+          git commit -am "deploy: ${{ github.event.repository.name }} images ${TAG}"
           git push
