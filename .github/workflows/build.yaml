@@ -1,4 +1,4 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 name: Tests and package CI
@@ -70,7 +70,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/physense-api
+          images: ghcr.io/${{ github.repository_owner }}/eigora-api
           tags: |
             type=sha,prefix=sha-,format=short
             type=raw,value=latest,enable={{is_default_branch}}
@@ -99,7 +99,7 @@ jobs:
       - name: Checkout gitops repo
         uses: actions/checkout@v4
         with:
-          repository: Tampipo/physense-gitops
+          repository: Tampipo/eigora-gitops
           token: ${{ secrets.GITOPS_TOKEN }}
           path: gitops
 
@@ -113,8 +113,8 @@ jobs:
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           TAG="sha-${GITHUB_SHA::7}"   # main -> rolling sha (matches type=sha,format=short)
           echo "TAG=$TAG" >> "$GITHUB_ENV"
-          cd "gitops/apps/physense-api" \
-            && kustomize edit set image "ghcr.io/$OWNER/physense-api=ghcr.io/$OWNER/physense-api:$TAG"
+          cd "gitops/apps/eigora-api" \
+            && kustomize edit set image "ghcr.io/$OWNER/eigora-api=ghcr.io/$OWNER/eigora-api:$TAG"
 
 
       - name: Commit and push changes

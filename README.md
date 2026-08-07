@@ -1,16 +1,16 @@
-# physense-api
+# eigora-api
 
-FastAPI backend for the [Physense](https://physense.tampipo.fr) platform. Exposes physics simulations from `physense-qm` (and future modules) as an HTTP/WebSocket API.
+FastAPI backend for the [Eigora](https://eigora.tampipo.fr) platform. Exposes physics simulations from `eigora` (and future modules) as an HTTP/WebSocket API.
 
-Live at: **https://api.physense.tampipo.fr**  
-Interactive docs: **https://api.physense.tampipo.fr/docs**
+Live at: **https://api.eigora.tampipo.fr**  
+Interactive docs: **https://api.eigora.tampipo.fr/docs**
 
 ---
 
 ## Structure
 
 ```
-src/physense_api/
+src/eigora_api/
   main.py              # FastAPI app, CORS, lifespan
   routers/
     qm.py              # /qm/eigenstates, /qm/separable-state,
@@ -18,7 +18,7 @@ src/physense_api/
   schemas/
     qm.py              # Pydantic request/response models
   utils/
-    potentials.py      # Maps PotentialSchema → physense_qm Potential objects
+    potentials.py      # Maps PotentialSchema → eigora.qm Potential objects
 ```
 
 ---
@@ -26,16 +26,16 @@ src/physense_api/
 ## Running locally
 
 ```bash
-git clone https://github.com/Tampipo/physense-api
-cd physense-api
+git clone https://github.com/Tampipo/eigora-api
+cd eigora-api
 pip install -e ".[dev]"
-uvicorn physense_api.main:app --reload --port 8000
+uvicorn eigora_api.main:app --reload --port 8000
 ```
 
 CORS is configured via the `ALLOWED_ORIGINS` environment variable (comma-separated). Defaults to `http://localhost:3000` for local development.
 
 ```bash
-ALLOWED_ORIGINS=http://localhost:3000,https://physense.tampipo.fr uvicorn physense_api.main:app
+ALLOWED_ORIGINS=http://localhost:3000,https://eigora.tampipo.fr uvicorn eigora_api.main:app
 ```
 
 ---
@@ -43,8 +43,8 @@ ALLOWED_ORIGINS=http://localhost:3000,https://physense.tampipo.fr uvicorn physen
 ## Running with Docker
 
 ```bash
-docker build -t physense-api .
-docker run -p 8000:8000 -e ALLOWED_ORIGINS=http://localhost:3000 physense-api
+docker build -t eigora-api .
+docker run -p 8000:8000 -e ALLOWED_ORIGINS=http://localhost:3000 eigora-api
 ```
 
 ---
@@ -169,7 +169,7 @@ Streams wavepacket time evolution frames.
 import asyncio, websockets, json
 
 async def test():
-    async with websockets.connect("wss://api.physense.tampipo.fr/qm/evolve") as ws:
+    async with websockets.connect("wss://api.eigora.tampipo.fr/qm/evolve") as ws:
         await ws.send(json.dumps({
             "grid": {"x_min": -20, "x_max": 20, "n_points": 512},
             "potential": {"type": "barrier", "params": {"height": 2.0, "width": 2.0}},
@@ -223,7 +223,7 @@ pytest
 The API is containerised and deployed on a k3s cluster via ArgoCD. The CI pipeline (GitHub Actions) builds and pushes a multi-arch Docker image to GHCR on every push to `main`. ArgoCD Image Updater automatically bumps the image tag in the gitops repo and triggers a rollout.
 
 ```
-push to main → CI → ghcr.io/tampipo/physense-api:x.y.z → ArgoCD → k3s
+push to main → CI → ghcr.io/tampipo/eigora-api:x.y.z → ArgoCD → k3s
 ```
 
 ---
@@ -233,5 +233,5 @@ push to main → CI → ghcr.io/tampipo/physense-api:x.y.z → ArgoCD → k3s
 - `fastapi >= 0.115`
 - `uvicorn >= 0.30`
 - `websockets >= 13.0`
-- `physense-utils`
-- `physense-qm`
+- `eigora`
+- `eigora`

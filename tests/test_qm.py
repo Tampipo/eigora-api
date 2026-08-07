@@ -1,4 +1,4 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
@@ -11,7 +11,7 @@ import pytest
 import numpy as np
 from httpx import AsyncClient, ASGITransport
 from fastapi.testclient import TestClient
-from physense_api.main import app
+from eigora_api.main import app
 
 
 @pytest.fixture
@@ -360,7 +360,7 @@ class TestEvolveWebSocket:
             assert 0.0 < msg["mean_energy_transmission"] < 1.0
             # T(E) is convex in the tunnelling regime, so the energy-averaged
             # prediction should exceed T at a single mean energy (Jensen's
-            # inequality) -- see physense_qm's scattering tests.
+            # inequality) -- see eigora.qm's scattering tests.
             assert msg["predicted_transmission"] > msg["mean_energy_transmission"]
 
             # Drain the rest of the stream

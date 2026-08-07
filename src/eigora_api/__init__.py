@@ -1,0 +1,6 @@
+# Copyright (C) 2026 Tanguy Marsault - Eigora
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+from eigora_api.main import app
+
+__all__ = ["app"]
