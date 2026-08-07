@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "physense-api"
+name = "eigora-api"
 version = "0.1.0"
-description = "FastAPI backend for the Physense simulation platform"
+description = "FastAPI backend for the Eigora simulation platform"
 license = "AGPL-3.0-or-later"
 license-files = ["LICENSE"]
 authors = [{ name = "Tanguy Marsault" }]
@@ -16,8 +16,7 @@ dependencies = [
     "websockets>=13.0",
     "pyyaml>=6.0",
     "scikit-image>=0.24",
-    "physense-utils @ git+https://github.com/Tampipo/physense-utils",
-    "physense-qm @ git+https://github.com/Tampipo/physense-qm",
+    "eigora @ git+https://github.com/Tampipo/eigora",
 ]
 
 [project.optional-dependencies]
@@ -29,7 +28,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/physense_api"]
+packages = ["src/eigora_api"]
 
 [tool.hatch.metadata]
 allow-direct-references = true
@@ -37,7 +36,7 @@ allow-direct-references = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-addopts = "--cov=physense_api --cov-report=term-missing"
+addopts = "--cov=eigora_api --cov-report=term-missing"
 
 [tool.coverage.run]
-source = ["src/physense_api"]
+source = ["src/eigora_api"]

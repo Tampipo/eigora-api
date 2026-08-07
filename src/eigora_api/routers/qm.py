@@ -1,4 +1,4 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
@@ -13,14 +13,14 @@ import json
 import numpy as np
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
-from physense_utils.grids import GridND
-from physense_qm import QuantumSystem1D
-from physense_qm.states.wavepacket import GaussianWavepacket
-from physense_qm.potentials import RectangularBarrier, SeparablePotential
-from physense_qm.scattering import energy_averaged_transmission
-from physense_qm.spectra import spectrum_for
-from physense_qm.states.orbitals import SingleAtomState
-from physense_api.schemas.qm import (
+from eigora.grids import GridND
+from eigora.qm import QuantumSystem1D
+from eigora.qm.states.wavepacket import GaussianWavepacket
+from eigora.qm.potentials import RectangularBarrier, SeparablePotential
+from eigora.qm.scattering import energy_averaged_transmission
+from eigora.qm.spectra import spectrum_for
+from eigora.qm.states.orbitals import SingleAtomState
+from eigora_api.schemas.qm import (
     EigenstatesRequest,
     EigenstatesResponse,
     EvolveRequest,
@@ -31,8 +31,8 @@ from physense_api.schemas.qm import (
     SingleAtomStateResponse,
     SingleAtomStateRequest,
 )
-from physense_api.utils.potentials import build_potential
-from physense_api.utils.orbital_mesh import build_orbital_mesh
+from eigora_api.utils.potentials import build_potential
+from eigora_api.utils.orbital_mesh import build_orbital_mesh
 
 router = APIRouter(prefix="/qm", tags=["Quantum Mechanics"])
 

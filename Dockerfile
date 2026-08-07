@@ -1,4 +1,4 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 FROM python:3.12-slim
@@ -13,4 +13,4 @@ COPY . .
 RUN pip install -e .
 
 EXPOSE 8000
-CMD ["uvicorn", "physense_api.main:app", "--host", "0.0.0", "--port", "8000"]
+CMD ["uvicorn", "eigora_api.main:app", "--host", "0.0.0", "--port", "8000"]

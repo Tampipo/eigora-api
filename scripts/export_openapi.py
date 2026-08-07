@@ -1,9 +1,9 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # scripts/export_openapi.py
 import yaml
-from physense_api.main import app
+from eigora_api.main import app
 
 openapi = app.openapi()
 

@@ -1,14 +1,14 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
-Maps PotentialSchema to physense_qm Potential objects.
+Maps PotentialSchema to eigora.qm Potential objects.
 Keeps routing logic out of the router.
 """
 
 import numpy as np
 
-from physense_qm.potentials import (
+from eigora.qm.potentials import (
     Potential,
     FreeParticle,
     HarmonicWell,
@@ -18,9 +18,9 @@ from physense_qm.potentials import (
     PotentialStep,
     DoubleWell,
 )
-from physense_utils.grids import GridND
+from eigora.grids import GridND
 
-from physense_api.schemas.qm import PotentialSchema, PotentialType
+from eigora_api.schemas.qm import PotentialSchema, PotentialType
 
 
 class CustomPotential(Potential):
@@ -40,7 +40,7 @@ class CustomPotential(Potential):
 
 def build_potential(schema: PotentialSchema, grid: GridND) -> Potential:
     """
-    Construct a physense_qm Potential from a PotentialSchema.
+    Construct a eigora.qm Potential from a PotentialSchema.
 
     Parameters
     ----------

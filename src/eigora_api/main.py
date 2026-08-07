@@ -1,8 +1,8 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
-Physense API — FastAPI application.
+Eigora API — FastAPI application.
 """
 
 import os
@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from physense_api.routers import qm
+from eigora_api.routers import qm
 
 
 @asynccontextmanager
@@ -21,8 +21,8 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="Physense API",
-        description="Physics simulation backend for the Physense platform.",
+        title="Eigora API",
+        description="Physics simulation backend for the Eigora platform.",
         version="0.1.0",
         lifespan=lifespan,
     )

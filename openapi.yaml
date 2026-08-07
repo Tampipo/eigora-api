@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
-  title: Physense API
-  description: Physics simulation backend for the Physense platform.
+  title: Eigora API
+  description: Physics simulation backend for the Eigora platform.
   version: 0.1.0
 paths:
   /qm/eigenstates:
