@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
+    <img alt="Eigora" src="assets/logo-light.svg" width="240">
+  </picture>
+</p>
+
 # eigora-api
 
 FastAPI backend for the [Eigora](https://eigora.tampipo.fr) platform. Exposes physics simulations from `eigora` (and future modules) as an HTTP/WebSocket API.
