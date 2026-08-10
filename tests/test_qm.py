@@ -311,6 +311,136 @@ class TestSingleAtomState:
         assert resp.status_code == 422
 
 
+class TestDiscreteMeasurement:
+    SIGMA_Z = {"re": [[1, 0], [0, -1]]}
+    SIGMA_Y = {"re": [[0, 0], [0, 0]], "im": [[0, -1], [1, 0]]}
+
+    async def test_plus_state_in_z_basis(self, async_client):
+        # |+> = (|0> + |1>)/sqrt(2) is an even superposition of the two
+        # sigma_z eigenstates, so both outcomes carry probability 1/2.
+        async with async_client as c:
+            resp = await c.post("/qm/discrete-measurement", json={
+                "state": {"re": [1, 1]},
+                "operator": self.SIGMA_Z,
+            })
+        assert resp.status_code == 200
+        outcomes = resp.json()["outcomes"]
+        assert [o["value"] for o in outcomes] == [-1.0, 1.0]
+        assert all(abs(o["probability"] - 0.5) < 1e-12 for o in outcomes)
+        assert all(o["degeneracy"] == 1 for o in outcomes)
+        # Collapse lands on a basis state, up to a global phase.
+        assert [abs(z) for z in outcomes[1]["state"]["re"]] == pytest.approx([1, 0])
+
+    async def test_eigenstate_gives_certain_outcome(self, async_client):
+        async with async_client as c:
+            resp = await c.post("/qm/discrete-measurement", json={
+                "state": {"re": [1, 0]},
+                "operator": self.SIGMA_Z,
+            })
+        outcomes = resp.json()["outcomes"]
+        assert outcomes[1]["probability"] == pytest.approx(1.0)
+        # The impossible outcome has no collapsed state to report.
+        assert outcomes[0]["probability"] == pytest.approx(0.0)
+        assert outcomes[0]["state"] is None
+
+    async def test_complex_amplitudes_are_not_dropped(self, async_client):
+        # (|0> + i|1>)/sqrt(2) is the +1 eigenstate of sigma_y, so the outcome
+        # is certain. Ignoring the imaginary part would give 1/2 - 1/2 instead.
+        async with async_client as c:
+            resp = await c.post("/qm/discrete-measurement", json={
+                "state": {"re": [1, 0], "im": [0, 1]},
+                "operator": self.SIGMA_Y,
+            })
+        assert resp.status_code == 200
+        outcomes = resp.json()["outcomes"]
+        assert outcomes[1]["value"] == pytest.approx(1.0)
+        assert outcomes[1]["probability"] == pytest.approx(1.0)
+
+    async def test_degenerate_eigenvalue_is_one_outcome(self, async_client):
+        # diag(1, 1, 2): the eigenvalue 1 spans a 2D subspace, so it appears
+        # once with the probability summed over it, and the collapse projects
+        # onto the whole subspace rather than onto one basis vector.
+        async with async_client as c:
+            resp = await c.post("/qm/discrete-measurement", json={
+                "state": {"re": [1, 1, 1]},
+                "operator": {"re": [[1, 0, 0], [0, 1, 0], [0, 0, 2]]},
+            })
+        outcomes = resp.json()["outcomes"]
+        assert len(outcomes) == 2
+        assert outcomes[0]["value"] == pytest.approx(1.0)
+        assert outcomes[0]["degeneracy"] == 2
+        assert outcomes[0]["probability"] == pytest.approx(2 / 3)
+        collapsed = np.array(outcomes[0]["state"]["re"]) + 1j * np.array(
+            outcomes[0]["state"]["im"]
+        )
+        assert np.abs(collapsed) == pytest.approx([1 / np.sqrt(2), 1 / np.sqrt(2), 0])
+
+    async def test_draws_are_counted_and_reproducible(self, async_client):
+        body = {
+            "state": {"re": [1, 1]},
+            "operator": self.SIGMA_Z,
+            "n_draws": 1000,
+            "seed": 42,
+        }
+        async with async_client as c:
+            first = await c.post("/qm/discrete-measurement", json=body)
+            second = await c.post("/qm/discrete-measurement", json=body)
+        assert first.status_code == 200
+        counts = [o["count"] for o in first.json()["outcomes"]]
+        assert sum(counts) == 1000
+        assert first.json()["n_draws"] == 1000
+        assert second.json() == first.json()
+
+    async def test_no_counts_without_n_draws(self, async_client):
+        async with async_client as c:
+            resp = await c.post("/qm/discrete-measurement", json={
+                "state": {"re": [1, 1]},
+                "operator": self.SIGMA_Z,
+            })
+        assert resp.json()["n_draws"] is None
+        assert all(o["count"] is None for o in resp.json()["outcomes"])
+
+    async def test_non_hermitian_operator(self, async_client):
+        async with async_client as c:
+            resp = await c.post("/qm/discrete-measurement", json={
+                "state": {"re": [1, 0]},
+                "operator": {"re": [[0, 1], [0, 0]]},
+            })
+        assert resp.status_code == 422
+
+    async def test_dimension_mismatch(self, async_client):
+        async with async_client as c:
+            resp = await c.post("/qm/discrete-measurement", json={
+                "state": {"re": [1, 0, 0]},
+                "operator": self.SIGMA_Z,
+            })
+        assert resp.status_code == 422
+
+    async def test_non_square_operator(self, async_client):
+        async with async_client as c:
+            resp = await c.post("/qm/discrete-measurement", json={
+                "state": {"re": [1, 0]},
+                "operator": {"re": [[1, 0, 0], [0, -1, 0]]},
+            })
+        assert resp.status_code == 422
+
+    async def test_zero_state(self, async_client):
+        async with async_client as c:
+            resp = await c.post("/qm/discrete-measurement", json={
+                "state": {"re": [0, 0]},
+                "operator": self.SIGMA_Z,
+            })
+        assert resp.status_code == 422
+
+    async def test_mismatched_re_and_im(self, async_client):
+        async with async_client as c:
+            resp = await c.post("/qm/discrete-measurement", json={
+                "state": {"re": [1, 0], "im": [0]},
+                "operator": self.SIGMA_Z,
+            })
+        assert resp.status_code == 422
+
+
 class TestEvolveWebSocket:
     def test_evolve_metadata_and_frames(self, client):
         with client.websocket_connect("/qm/evolve") as ws:
