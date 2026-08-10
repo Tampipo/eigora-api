@@ -380,6 +380,31 @@ class EvolveRequest(BaseModel):
     t_max: float = Field(default=10.0, gt=0, le=50.0)
     dt: float = Field(default=0.01, gt=0, le=0.1)
     n_frames: int = Field(default=60, ge=10, le=200)
+    view_window: list[float] | None = Field(
+        default=None,
+        description=(
+            "[x_lo, x_hi] to stream, as a sub-range of the grid. The grid has "
+            "to be wide enough that the packet never reaches its edge -- the "
+            "propagator is FFT-based, so anything that does wraps around and "
+            "corrupts the run -- but that same width is mostly empty space "
+            "nobody wants to look at. Set this to send only the part worth "
+            "drawing. Solving always uses the full grid; this crops the "
+            "output. None streams everything."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def check_view_window(self) -> "EvolveRequest":
+        if self.view_window is None:
+            return self
+        if len(self.view_window) != 2:
+            raise ValueError("view_window must be [x_lo, x_hi]")
+        lo, hi = self.view_window
+        if lo >= hi:
+            raise ValueError("view_window x_lo must be less than x_hi")
+        if hi <= self.grid.x_min or lo >= self.grid.x_max:
+            raise ValueError("view_window does not overlap the grid")
+        return self
 
 
 class EvolveFrame(BaseModel):
@@ -390,10 +415,22 @@ class EvolveFrame(BaseModel):
 
 
 class EvolveMetadata(BaseModel):
-    x: list[float]
+    x: list[float] = Field(
+        description=(
+            "Grid points actually being streamed. Equal to the full solver "
+            "grid unless view_window cropped it."
+        )
+    )
     potential: list[float]
     t_max: float
     n_frames: int
+    grid_bounds: list[float] = Field(
+        default_factory=list,
+        description=(
+            "[x_min, x_max] of the full grid the equation was solved on, "
+            "which is wider than `x` whenever view_window is in play."
+        ),
+    )
     predicted_transmission: float | None = Field(
         default=None,
         description=(
@@ -413,6 +450,83 @@ class EvolveMetadata(BaseModel):
     )
 
 
+# ── Trajectory ────────────────────────────────────────────────────────────────
+
+class TrajectoryRequest(BaseModel):
+    grid: GridSchema = Field(default_factory=GridSchema)
+    potential: PotentialSchema
+    wavepacket: WavepacketSchema = Field(default_factory=WavepacketSchema)
+    t_max: float = Field(default=10.0, gt=0, le=50.0)
+    dt: float = Field(default=0.01, gt=0, le=0.1)
+    n_frames: int = Field(
+        default=120,
+        ge=10,
+        le=400,
+        description=(
+            "Samples along the trajectory. Can be larger than for /evolve: a "
+            "sample here is a handful of numbers, not a full density array."
+        ),
+    )
+
+
+class TrajectoryResponse(BaseModel):
+    """
+    Where the wavepacket is, as a function of time.
+
+    Everything is an expectation value over |psi(x, t)|^2, so this is the
+    answer to 'where is the particle' in the only sense quantum mechanics
+    allows -- a mean and a spread, not a point.
+    """
+
+    times: list[float]
+    mean_position: list[float] = Field(description="<x>(t)")
+    mean_momentum: list[float] = Field(description="<p>(t)")
+    spread_position: list[float] = Field(
+        description=(
+            "Delta x (t). Constant when the packet is a coherent state, "
+            "oscillating at 2*omega otherwise."
+        )
+    )
+    spread_momentum: list[float] = Field(description="Delta p (t)")
+    uncertainty_product: list[float] = Field(
+        description="Delta x * Delta p (t). Never below 1/2; equal to 1/2 throughout for a coherent state."
+    )
+    energy: float = Field(description="<H>, conserved over the run")
+    boundary_leakage: float = Field(
+        description=(
+            "Largest fraction of |psi|^2 in the outer 5% of the grid at any "
+            "frame. The propagator is FFT-based, so the box is periodic and a "
+            "packet reaching one edge reappears at the other -- which turns "
+            "every series above into an average over a ring. Above ~1e-3, "
+            "widen the grid or shorten t_max; the numbers cannot be trusted."
+        )
+    )
+    classical_position: list[float] | None = Field(
+        default=None,
+        description=(
+            "Position of a classical point particle launched from (x0, k0) in "
+            "the same potential. In a harmonic well this coincides with "
+            "mean_position exactly -- Ehrenfest's theorem, since the force is "
+            "linear. None for potentials with a step in them (well, barrier, "
+            "step), where the force is a delta function that no finite "
+            "difference can represent."
+        ),
+    )
+    classical_momentum: list[float] | None = Field(default=None)
+    turning_points: list[float] | None = Field(
+        default=None,
+        description="[x_left, x_right] reached by the classical particle, where V(x) = E.",
+    )
+    coherent_width: float | None = Field(
+        default=None,
+        description=(
+            "The sigma that would make this packet a coherent state, "
+            "1/sqrt(2*omega). Harmonic potential only -- an anharmonic well "
+            "has no shape-invariant Gaussian, so this is None there."
+        ),
+    )
+
+
 __all__ = [
     "GridSchema",
     "Grid2DSchema",
@@ -427,6 +541,8 @@ __all__ = [
     "EvolveRequest",
     "EvolveFrame",
     "EvolveMetadata",
+    "TrajectoryRequest",
+    "TrajectoryResponse",
     "SingleAtomStateRequest",
     "SingleAtomStateResponse",
     "ComplexVectorSchema",
