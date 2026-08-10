@@ -100,6 +100,44 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /qm/discrete-measurement:
+    post:
+      tags:
+      - Quantum Mechanics
+      summary: Discrete Measurement
+      description: 'Measure a Hermitian observable on a state of a discrete Hilbert
+        space.
+
+
+        Returns one entry per *distinct* eigenvalue — its Born probability and the
+
+        state the measurement collapses to — so a degenerate eigenvalue appears
+
+        once, with its probability summed over the whole eigenspace. Those
+
+        probabilities are exact; `n_draws` additionally samples that distribution
+
+        and reports how many draws landed on each outcome.'
+      operationId: discrete_measurement_qm_discrete_measurement_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MeasurementRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeasurementResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
 components:
   schemas:
     BarrierParams:
@@ -120,6 +158,53 @@ components:
           default: 0.0
       type: object
       title: BarrierParams
+    ComplexMatrixSchema:
+      properties:
+        re:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Re
+          description: Real parts, row-major
+        im:
+          anyOf:
+          - items:
+              items:
+                type: number
+              type: array
+            type: array
+          - type: 'null'
+          title: Im
+          description: Imaginary parts, row-major. Omit for a real matrix.
+      type: object
+      required:
+      - re
+      title: ComplexMatrixSchema
+      description: 'A complex square matrix, row-major: M[i][j] = re[i][j] + 1j *
+        im[i][j].'
+    ComplexVectorSchema:
+      properties:
+        re:
+          items:
+            type: number
+          type: array
+          title: Re
+          description: Real parts, one per coefficient
+        im:
+          anyOf:
+          - items:
+              type: number
+            type: array
+          - type: 'null'
+          title: Im
+          description: Imaginary parts. Omit for a real vector.
+      type: object
+      required:
+      - re
+      title: ComplexVectorSchema
+      description: 'A complex vector: v[k] = re[k] + 1j * im[k].'
     DoubleWellParams:
       properties:
         a:
@@ -367,6 +452,99 @@ components:
         bytes: positions/normals are flat float32 [x,y,z,...]; indices are flat
 
         uint32 triangle vertex indices.'
+    MeasurementRequest:
+      properties:
+        state:
+          $ref: '#/components/schemas/ComplexVectorSchema'
+          description: State in the computational basis. Normalised server-side.
+        operator:
+          $ref: '#/components/schemas/ComplexMatrixSchema'
+          description: Hermitian observable in the computational basis
+        n_draws:
+          anyOf:
+          - type: integer
+            maximum: 1000000.0
+            minimum: 1.0
+          - type: 'null'
+          title: N Draws
+          description: Number of measurements to sample, for showing shot noise against
+            the exact probabilities. Omit to skip sampling; the outcomes themselves
+            are the same either way.
+        seed:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+          - type: 'null'
+          title: Seed
+          description: Seed for the draws, to make them reproducible
+      type: object
+      required:
+      - state
+      - operator
+      title: MeasurementRequest
+      description: 'A projective measurement of `operator` on `state`.
+
+
+        The operator must be Hermitian; its eigenvalues are the possible outcomes.'
+    MeasurementResponse:
+      properties:
+        outcomes:
+          items:
+            $ref: '#/components/schemas/OutcomeSchema'
+          type: array
+          title: Outcomes
+          description: One entry per distinct eigenvalue, ascending in value
+        n_draws:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: N Draws
+          description: Number of draws sampled, echoed back
+      type: object
+      required:
+      - outcomes
+      title: MeasurementResponse
+    OutcomeSchema:
+      properties:
+        value:
+          type: number
+          title: Value
+          description: The eigenvalue observed
+        probability:
+          type: number
+          title: Probability
+          description: Born probability, summed over the eigenspace
+        degeneracy:
+          type: integer
+          title: Degeneracy
+          description: Dimension of the eigenspace for this value
+        state:
+          anyOf:
+          - $ref: '#/components/schemas/ComplexVectorSchema'
+          - type: 'null'
+          description: Normalised post-measurement state, None where the probability
+            is zero and the collapse is undefined.
+        count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Count
+          description: Draws that gave this outcome. None unless n_draws was set.
+      type: object
+      required:
+      - value
+      - probability
+      - degeneracy
+      - state
+      title: OutcomeSchema
+      description: 'One distinct eigenvalue, and what measuring it does to the state.
+
+
+        A degenerate eigenvalue appears once, with its probability summed over the
+
+        whole eigenspace and `state` the projection onto that subspace — not onto
+
+        any single eigenvector.'
     PotentialSchema:
       properties:
         type:
