@@ -20,6 +20,7 @@ from eigora.qm.potentials import RectangularBarrier, SeparablePotential
 from eigora.qm.scattering import energy_averaged_transmission
 from eigora.qm.spectra import spectrum_for
 from eigora.qm.states.orbitals import SingleAtomState
+from eigora.qm.discrete import Observable, Outcome, measurement
 from eigora_api.schemas.qm import (
     EigenstatesRequest,
     EigenstatesResponse,
@@ -30,9 +31,13 @@ from eigora_api.schemas.qm import (
     SeparableStateResponse,
     SingleAtomStateResponse,
     SingleAtomStateRequest,
+    MeasurementRequest,
+    OutcomeSchema,
+    MeasurementResponse,
 )
 from eigora_api.utils.potentials import build_potential
 from eigora_api.utils.orbital_mesh import build_orbital_mesh
+from eigora_api.utils.complex_arrays import to_array, to_vector_schema
 
 router = APIRouter(prefix="/qm", tags=["Quantum Mechanics"])
 
@@ -156,6 +161,67 @@ def single_atom_state(req: SingleAtomStateRequest) -> SingleAtomStateResponse:
         l=req.l,
         m=req.m,
     )
+
+@router.post("/discrete-measurement", response_model=MeasurementResponse)
+def discrete_measurement(req: MeasurementRequest) -> MeasurementResponse:
+    """
+    Measure a Hermitian observable on a state of a discrete Hilbert space.
+
+    Returns one entry per *distinct* eigenvalue — its Born probability and the
+    state the measurement collapses to — so a degenerate eigenvalue appears
+    once, with its probability summed over the whole eigenspace. Those
+    probabilities are exact; `n_draws` additionally samples that distribution
+    and reports how many draws landed on each outcome.
+    """
+    psi = to_array(req.state)
+    try:
+        observable = Observable(to_array(req.operator))
+        outcomes = observable.outcomes(psi)
+        eigenvectors = observable.eigenvectors()
+        collapsed = [
+            to_vector_schema(measurement.collapse(eigenvectors, outcome.indices, psi))
+            if outcome.probability > 0
+            else None
+            for outcome in outcomes
+        ]
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    return MeasurementResponse(
+        outcomes=[
+            OutcomeSchema(
+                value=outcome.value,
+                probability=outcome.probability,
+                degeneracy=outcome.degeneracy,
+                state=state,
+                count=count,
+            )
+            for outcome, state, count in zip(
+                outcomes, collapsed, _draw_counts(outcomes, req.n_draws, req.seed)
+            )
+        ],
+        n_draws=req.n_draws,
+    )
+
+
+def _draw_counts(
+    outcomes: list[Outcome], n_draws: int | None, seed: int | None
+) -> list[int | None]:
+    """
+    Sample `n_draws` independent measurements, as a count per outcome.
+
+    Drawing the counts from a multinomial is the same distribution as
+    measuring `n_draws` freshly prepared copies one at a time, without
+    rediagonalising the observable on every shot.
+    """
+    if n_draws is None:
+        return [None] * len(outcomes)
+    probabilities = np.array([outcome.probability for outcome in outcomes])
+    # Guard against the probabilities summing to 1 only up to rounding.
+    probabilities = probabilities / probabilities.sum()
+    rng = np.random.default_rng(seed)
+    return [int(count) for count in rng.multinomial(n_draws, probabilities)]
+
 
 @router.websocket("/evolve")
 async def evolve(websocket: WebSocket) -> None:

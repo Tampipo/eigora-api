@@ -234,7 +234,137 @@ class SingleAtomStateResponse(BaseModel):
     n: int
     l: int
     m: int
-    
+
+# ── Discrete measurements ─────────────────────────────────────────────────────
+
+# JSON has no complex type, and amplitudes are complex, so complex arrays
+# travel as two real ones: split rather than interleaved, so each half drops
+# straight into a typed array on the client.
+
+class ComplexVectorSchema(BaseModel):
+    """A complex vector: v[k] = re[k] + 1j * im[k]."""
+
+    re: list[float] = Field(description="Real parts, one per coefficient")
+    im: list[float] | None = Field(
+        default=None, description="Imaginary parts. Omit for a real vector."
+    )
+
+    @model_validator(mode="after")
+    def check_shape(self) -> "ComplexVectorSchema":
+        if not self.re:
+            raise ValueError("the vector must have at least one coefficient")
+        if self.im is not None and len(self.im) != len(self.re):
+            raise ValueError("re and im must have the same length")
+        return self
+
+    @property
+    def dim(self) -> int:
+        """Dimension of the Hilbert space."""
+        return len(self.re)
+
+
+class ComplexMatrixSchema(BaseModel):
+    """A complex square matrix, row-major: M[i][j] = re[i][j] + 1j * im[i][j]."""
+
+    re: list[list[float]] = Field(description="Real parts, row-major")
+    im: list[list[float]] | None = Field(
+        default=None, description="Imaginary parts, row-major. Omit for a real matrix."
+    )
+
+    @model_validator(mode="after")
+    def check_shape(self) -> "ComplexMatrixSchema":
+        if not self.re:
+            raise ValueError("the matrix must have at least one row")
+        if any(len(row) != len(self.re) for row in self.re):
+            raise ValueError(
+                f"the matrix must be square: {len(self.re)} rows, so every row "
+                f"must have {len(self.re)} entries"
+            )
+        if self.im is not None and (
+            len(self.im) != len(self.re)
+            or any(len(row) != len(self.re) for row in self.im)
+        ):
+            raise ValueError("im must have the same shape as re")
+        return self
+
+    @property
+    def dim(self) -> int:
+        """Dimension of the Hilbert space."""
+        return len(self.re)
+
+
+class MeasurementRequest(BaseModel):
+    """
+    A projective measurement of `operator` on `state`.
+
+    The operator must be Hermitian; its eigenvalues are the possible outcomes.
+    """
+
+    state: ComplexVectorSchema = Field(
+        description="State in the computational basis. Normalised server-side."
+    )
+    operator: ComplexMatrixSchema = Field(
+        description="Hermitian observable in the computational basis"
+    )
+    n_draws: int | None = Field(
+        default=None,
+        ge=1,
+        le=1_000_000,
+        description=(
+            "Number of measurements to sample, for showing shot noise against "
+            "the exact probabilities. Omit to skip sampling; the outcomes "
+            "themselves are the same either way."
+        ),
+    )
+    seed: int | None = Field(
+        default=None, ge=0, description="Seed for the draws, to make them reproducible"
+    )
+
+    @model_validator(mode="after")
+    def check_dimensions(self) -> "MeasurementRequest":
+        if self.state.dim != self.operator.dim:
+            raise ValueError(
+                f"state has {self.state.dim} coefficient(s) but the operator is "
+                f"{self.operator.dim}x{self.operator.dim}"
+            )
+        return self
+
+
+class OutcomeSchema(BaseModel):
+    """
+    One distinct eigenvalue, and what measuring it does to the state.
+
+    A degenerate eigenvalue appears once, with its probability summed over the
+    whole eigenspace and `state` the projection onto that subspace — not onto
+    any single eigenvector.
+    """
+
+    value: float = Field(description="The eigenvalue observed")
+    probability: float = Field(
+        description="Born probability, summed over the eigenspace"
+    )
+    degeneracy: int = Field(description="Dimension of the eigenspace for this value")
+    state: ComplexVectorSchema | None = Field(
+        description=(
+            "Normalised post-measurement state, None where the probability is "
+            "zero and the collapse is undefined."
+        )
+    )
+    count: int | None = Field(
+        default=None,
+        description="Draws that gave this outcome. None unless n_draws was set.",
+    )
+
+
+class MeasurementResponse(BaseModel):
+    outcomes: list[OutcomeSchema] = Field(
+        description="One entry per distinct eigenvalue, ascending in value"
+    )
+    n_draws: int | None = Field(
+        default=None, description="Number of draws sampled, echoed back"
+    )
+
+
 # ── Evolution (WebSocket) ─────────────────────────────────────────────────────
 
 class WavepacketSchema(BaseModel):
@@ -299,4 +429,9 @@ __all__ = [
     "EvolveMetadata",
     "SingleAtomStateRequest",
     "SingleAtomStateResponse",
+    "ComplexVectorSchema",
+    "ComplexMatrixSchema",
+    "MeasurementRequest",
+    "OutcomeSchema",
+    "MeasurementResponse",
 ]
