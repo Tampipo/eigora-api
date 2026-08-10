@@ -467,6 +467,14 @@ class TrajectoryRequest(BaseModel):
             "sample here is a handful of numbers, not a full density array."
         ),
     )
+    include_classical: bool = Field(
+        default=False,
+        description=(
+            "Also integrate a classical point particle from (x0, k0) in the "
+            "same potential and return its path. Rejected for potentials with "
+            "a step in them, where a finite-difference force is meaningless."
+        ),
+    )
 
 
 class TrajectoryResponse(BaseModel):
@@ -505,25 +513,14 @@ class TrajectoryResponse(BaseModel):
         default=None,
         description=(
             "Position of a classical point particle launched from (x0, k0) in "
-            "the same potential. In a harmonic well this coincides with "
-            "mean_position exactly -- Ehrenfest's theorem, since the force is "
-            "linear. None for potentials with a step in them (well, barrier, "
-            "step), where the force is a delta function that no finite "
-            "difference can represent."
+            "the same potential, present only when include_classical was set. "
+            "In a harmonic well it coincides with mean_position exactly -- "
+            "Ehrenfest's theorem, since the force is linear."
         ),
     )
-    classical_momentum: list[float] | None = Field(default=None)
-    turning_points: list[float] | None = Field(
+    classical_momentum: list[float] | None = Field(
         default=None,
-        description="[x_left, x_right] reached by the classical particle, where V(x) = E.",
-    )
-    coherent_width: float | None = Field(
-        default=None,
-        description=(
-            "The sigma that would make this packet a coherent state, "
-            "1/sqrt(2*omega). Harmonic potential only -- an anharmonic well "
-            "has no shape-invariant Gaussian, so this is None there."
-        ),
+        description="Present only when include_classical was set.",
     )
 
 

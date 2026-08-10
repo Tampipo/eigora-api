@@ -459,7 +459,10 @@ class TestTrajectory:
 
     async def test_returns_all_series_at_the_right_length(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/trajectory", json=self.body(n_frames=60))
+            resp = await c.post(
+                "/qm/trajectory",
+                json=self.body(n_frames=60, include_classical=True),
+            )
         assert resp.status_code == 200
         d = resp.json()
 
@@ -483,10 +486,19 @@ class TestTrajectory:
         t = np.array(d["times"])
         assert np.max(np.abs(np.array(d["mean_position"]) - 2.5 * np.cos(t))) < 1e-3
 
-    async def test_ehrenfest_quantum_matches_classical(self, async_client):
-        """The whole point of returning both series: in a harmonic well they agree."""
+    async def test_classical_is_absent_unless_requested(self, async_client):
         async with async_client as c:
             resp = await c.post("/qm/trajectory", json=self.body())
+        d = resp.json()
+        assert d["classical_position"] is None
+        assert d["classical_momentum"] is None
+
+    async def test_ehrenfest_quantum_matches_classical(self, async_client):
+        """With include_classical, the two series agree in a harmonic well."""
+        async with async_client as c:
+            resp = await c.post(
+                "/qm/trajectory", json=self.body(include_classical=True)
+            )
         d = resp.json()
 
         quantum = np.array(d["mean_position"])
@@ -501,7 +513,13 @@ class TestTrajectory:
         sigma = 1 / np.sqrt(2 * self.OMEGA)
         assert np.allclose(d["spread_position"], sigma, atol=1e-3)
         assert np.allclose(d["uncertainty_product"], 0.5, atol=1e-3)
-        assert d["coherent_width"] == pytest.approx(sigma)
+
+    async def test_response_carries_no_derived_extras(self, async_client):
+        """The response is the series the request asked for, nothing bolted on."""
+        async with async_client as c:
+            resp = await c.post("/qm/trajectory", json=self.body())
+        assert "turning_points" not in resp.json()
+        assert "coherent_width" not in resp.json()
 
     async def test_squeezed_state_breathes(self, async_client):
         async with async_client as c:
@@ -516,32 +534,27 @@ class TestTrajectory:
         # Still a valid state at every instant.
         assert np.all(np.array(d["uncertainty_product"]) >= 0.5 - 1e-6)
 
-    async def test_energy_and_turning_points(self, async_client):
+    async def test_energy(self, async_client):
         async with async_client as c:
             resp = await c.post("/qm/trajectory", json=self.body())
-        d = resp.json()
+        assert resp.json()["energy"] == pytest.approx(3.625, rel=1e-3)
 
-        assert d["energy"] == pytest.approx(3.625, rel=1e-3)
-        left, right = d["turning_points"]
-        # Released from rest at x0, so it turns around at +/- x0.
-        assert left == pytest.approx(-2.5, abs=0.05)
-        assert right == pytest.approx(2.5, abs=0.05)
-
-    async def test_coherent_width_is_none_for_anharmonic(self, async_client):
+    async def test_classical_rejected_for_stepped_potentials(self, async_client):
+        """A square wall has no finite-difference force; say so, don't return null."""
         async with async_client as c:
             resp = await c.post(
                 "/qm/trajectory",
                 json=self.body(
-                    potential={"type": "double_well", "params": {"a": 1.0, "b": 4.0}},
-                    wavepacket={"x0": 1.4, "k0": 0.0, "sigma": 0.5},
-                    t_max=4.0,
+                    potential={"type": "infinite_well", "params": {"width": 6.0}},
+                    wavepacket={"x0": 0.5, "k0": 1.0, "sigma": 0.5},
+                    t_max=2.0,
+                    include_classical=True,
                 ),
             )
-        assert resp.status_code == 200
-        assert resp.json()["coherent_width"] is None
+        assert resp.status_code == 422
+        assert "include_classical" in str(resp.json())
 
-    async def test_hard_walls_drop_the_classical_comparison(self, async_client):
-        """The infinite well's force is unbounded; report no classical path."""
+    async def test_quantum_series_still_fine_for_stepped_potentials(self, async_client):
         async with async_client as c:
             resp = await c.post(
                 "/qm/trajectory",
@@ -553,9 +566,6 @@ class TestTrajectory:
             )
         assert resp.status_code == 200
         d = resp.json()
-        assert d["classical_position"] is None
-        assert d["turning_points"] is None
-        # The quantum side is unaffected.
         assert len(d["mean_position"]) == 120
         assert np.all(np.isfinite(d["mean_position"]))
 

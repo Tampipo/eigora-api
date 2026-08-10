@@ -18,7 +18,7 @@ from eigora.grids import GridND
 from eigora.qm import QuantumSystem1D
 from eigora.qm.evolution import classical_trajectory, quantum_trajectory
 from eigora.qm.states.wavepacket import GaussianWavepacket
-from eigora.qm.potentials import HarmonicWell, RectangularBarrier, SeparablePotential
+from eigora.qm.potentials import RectangularBarrier, SeparablePotential
 from eigora.qm.scattering import energy_averaged_transmission
 from eigora.qm.spectra import spectrum_for
 from eigora.qm.states.orbitals import SingleAtomState
@@ -259,22 +259,30 @@ def trajectory(req: TrajectoryRequest) -> TrajectoryResponse:
     )
     traj = quantum_trajectory(evolution)
 
-    # The classical integrator differentiates V numerically, so it is only
-    # honest on a smooth potential: across a square wall a finite difference
-    # reports zero force and the particle would sail straight through. Offer
-    # the comparison for the smooth potentials and decline for the rest.
-    smooth = req.potential.type in {
-        PotentialType.harmonic,
-        PotentialType.double_well,
-        PotentialType.free,
-    }
-    if smooth:
+    # Only computed when asked for, so the response shape follows the request.
+    # The integrator differentiates V numerically, which is meaningless across
+    # a square wall -- a finite difference reports zero force there and the
+    # particle sails straight through -- so asking for it on a stepped
+    # potential is an error rather than a silent null.
+    x_cl = p_cl = None
+    if req.include_classical:
+        if req.potential.type not in {
+            PotentialType.harmonic,
+            PotentialType.double_well,
+            PotentialType.free,
+        }:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"include_classical is not available for "
+                    f"'{req.potential.type.value}': its force is a delta "
+                    f"function at the step, which no finite difference can "
+                    f"represent. Supported: harmonic, double_well, free."
+                ),
+            )
         x_cl, p_cl = classical_trajectory(
             potential, wavepacket.x0, wavepacket.k0, traj.times
         )
-        classical_ok = bool(np.all(np.isfinite(x_cl)) and np.all(np.isfinite(p_cl)))
-    else:
-        classical_ok = False
 
     return TrajectoryResponse(
         times=traj.times.tolist(),
@@ -285,14 +293,8 @@ def trajectory(req: TrajectoryRequest) -> TrajectoryResponse:
         uncertainty_product=traj.uncertainty_product.tolist(),
         energy=traj.energy,
         boundary_leakage=traj.boundary_leakage,
-        classical_position=x_cl.tolist() if classical_ok else None,
-        classical_momentum=p_cl.tolist() if classical_ok else None,
-        turning_points=(
-            [float(x_cl.min()), float(x_cl.max())] if classical_ok else None
-        ),
-        coherent_width=(
-            potential.coherent_width if isinstance(potential, HarmonicWell) else None
-        ),
+        classical_position=x_cl.tolist() if x_cl is not None else None,
+        classical_momentum=p_cl.tolist() if p_cl is not None else None,
     )
 
 
