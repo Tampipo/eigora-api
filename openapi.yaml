@@ -138,6 +138,43 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /qm/trajectory:
+    post:
+      tags:
+      - Quantum Mechanics
+      summary: Trajectory
+      description: 'Track where a wavepacket is over time.
+
+
+        Returns <x>(t) and <p>(t) with their spreads, alongside the path a
+
+        classical point particle would take from the same starting conditions.
+
+        In a harmonic well the two positions coincide exactly (Ehrenfest''s
+
+        theorem, the force being linear); anywhere else the gap between them is
+
+        the part of the motion that has no classical counterpart.'
+      operationId: trajectory_qm_trajectory_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TrajectoryRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrajectoryResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
 components:
   schemas:
     BarrierParams:
@@ -797,6 +834,144 @@ components:
           default: 0.0
       type: object
       title: StepParams
+    TrajectoryRequest:
+      properties:
+        grid:
+          $ref: '#/components/schemas/GridSchema'
+        potential:
+          $ref: '#/components/schemas/PotentialSchema'
+        wavepacket:
+          $ref: '#/components/schemas/WavepacketSchema'
+        t_max:
+          type: number
+          maximum: 50.0
+          exclusiveMinimum: 0.0
+          title: T Max
+          default: 10.0
+        dt:
+          type: number
+          maximum: 0.1
+          exclusiveMinimum: 0.0
+          title: Dt
+          default: 0.01
+        n_frames:
+          type: integer
+          maximum: 400.0
+          minimum: 10.0
+          title: N Frames
+          description: 'Samples along the trajectory. Can be larger than for /evolve:
+            a sample here is a handful of numbers, not a full density array.'
+          default: 120
+      type: object
+      required:
+      - potential
+      title: TrajectoryRequest
+    TrajectoryResponse:
+      properties:
+        times:
+          items:
+            type: number
+          type: array
+          title: Times
+        mean_position:
+          items:
+            type: number
+          type: array
+          title: Mean Position
+          description: <x>(t)
+        mean_momentum:
+          items:
+            type: number
+          type: array
+          title: Mean Momentum
+          description: <p>(t)
+        spread_position:
+          items:
+            type: number
+          type: array
+          title: Spread Position
+          description: Delta x (t). Constant when the packet is a coherent state,
+            oscillating at 2*omega otherwise.
+        spread_momentum:
+          items:
+            type: number
+          type: array
+          title: Spread Momentum
+          description: Delta p (t)
+        uncertainty_product:
+          items:
+            type: number
+          type: array
+          title: Uncertainty Product
+          description: Delta x * Delta p (t). Never below 1/2; equal to 1/2 throughout
+            for a coherent state.
+        energy:
+          type: number
+          title: Energy
+          description: <H>, conserved over the run
+        boundary_leakage:
+          type: number
+          title: Boundary Leakage
+          description: Largest fraction of |psi|^2 in the outer 5% of the grid at
+            any frame. The propagator is FFT-based, so the box is periodic and a packet
+            reaching one edge reappears at the other -- which turns every series above
+            into an average over a ring. Above ~1e-3, widen the grid or shorten t_max;
+            the numbers cannot be trusted.
+        classical_position:
+          anyOf:
+          - items:
+              type: number
+            type: array
+          - type: 'null'
+          title: Classical Position
+          description: Position of a classical point particle launched from (x0, k0)
+            in the same potential. In a harmonic well this coincides with mean_position
+            exactly -- Ehrenfest's theorem, since the force is linear. None for potentials
+            with a step in them (well, barrier, step), where the force is a delta
+            function that no finite difference can represent.
+        classical_momentum:
+          anyOf:
+          - items:
+              type: number
+            type: array
+          - type: 'null'
+          title: Classical Momentum
+        turning_points:
+          anyOf:
+          - items:
+              type: number
+            type: array
+          - type: 'null'
+          title: Turning Points
+          description: '[x_left, x_right] reached by the classical particle, where
+            V(x) = E.'
+        coherent_width:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Coherent Width
+          description: The sigma that would make this packet a coherent state, 1/sqrt(2*omega).
+            Harmonic potential only -- an anharmonic well has no shape-invariant Gaussian,
+            so this is None there.
+      type: object
+      required:
+      - times
+      - mean_position
+      - mean_momentum
+      - spread_position
+      - spread_momentum
+      - uncertainty_product
+      - energy
+      - boundary_leakage
+      title: TrajectoryResponse
+      description: 'Where the wavepacket is, as a function of time.
+
+
+        Everything is an expectation value over |psi(x, t)|^2, so this is the
+
+        answer to ''where is the particle'' in the only sense quantum mechanics
+
+        allows -- a mean and a spread, not a point.'
     ValidationError:
       properties:
         loc:
@@ -823,3 +998,23 @@ components:
       - msg
       - type
       title: ValidationError
+    WavepacketSchema:
+      properties:
+        x0:
+          type: number
+          title: X0
+          description: Initial position
+          default: -5.0
+        k0:
+          type: number
+          title: K0
+          description: Initial momentum
+          default: 1.5
+        sigma:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Sigma
+          description: Spatial width
+          default: 1.0
+      type: object
+      title: WavepacketSchema
