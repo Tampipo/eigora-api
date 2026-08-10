@@ -441,6 +441,208 @@ class TestDiscreteMeasurement:
         assert resp.status_code == 422
 
 
+class TestTrajectory:
+    OMEGA = 1.0
+    PERIOD = 2 * np.pi / OMEGA
+
+    def body(self, **overrides):
+        body = {
+            "grid": {"x_min": -12, "x_max": 12, "n_points": 512},
+            "potential": {"type": "harmonic", "params": {"omega": self.OMEGA}},
+            "wavepacket": {"x0": 2.5, "k0": 0.0, "sigma": 1 / np.sqrt(2 * self.OMEGA)},
+            "t_max": self.PERIOD,
+            "dt": 0.005,
+            "n_frames": 120,
+        }
+        body.update(overrides)
+        return body
+
+    async def test_returns_all_series_at_the_right_length(self, async_client):
+        async with async_client as c:
+            resp = await c.post("/qm/trajectory", json=self.body(n_frames=60))
+        assert resp.status_code == 200
+        d = resp.json()
+
+        for key in (
+            "times",
+            "mean_position",
+            "mean_momentum",
+            "spread_position",
+            "spread_momentum",
+            "uncertainty_product",
+            "classical_position",
+            "classical_momentum",
+        ):
+            assert len(d[key]) == 60, key
+
+    async def test_mean_position_is_the_classical_cosine(self, async_client):
+        async with async_client as c:
+            resp = await c.post("/qm/trajectory", json=self.body())
+        d = resp.json()
+
+        t = np.array(d["times"])
+        assert np.max(np.abs(np.array(d["mean_position"]) - 2.5 * np.cos(t))) < 1e-3
+
+    async def test_ehrenfest_quantum_matches_classical(self, async_client):
+        """The whole point of returning both series: in a harmonic well they agree."""
+        async with async_client as c:
+            resp = await c.post("/qm/trajectory", json=self.body())
+        d = resp.json()
+
+        quantum = np.array(d["mean_position"])
+        classical = np.array(d["classical_position"])
+        assert np.max(np.abs(quantum - classical)) < 1e-3
+
+    async def test_coherent_state_holds_its_width(self, async_client):
+        async with async_client as c:
+            resp = await c.post("/qm/trajectory", json=self.body())
+        d = resp.json()
+
+        sigma = 1 / np.sqrt(2 * self.OMEGA)
+        assert np.allclose(d["spread_position"], sigma, atol=1e-3)
+        assert np.allclose(d["uncertainty_product"], 0.5, atol=1e-3)
+        assert d["coherent_width"] == pytest.approx(sigma)
+
+    async def test_squeezed_state_breathes(self, async_client):
+        async with async_client as c:
+            resp = await c.post(
+                "/qm/trajectory",
+                json=self.body(wavepacket={"x0": 2.5, "k0": 0.0, "sigma": 0.4}),
+            )
+        d = resp.json()
+
+        spread = np.array(d["spread_position"])
+        assert spread.max() - spread.min() > 0.2
+        # Still a valid state at every instant.
+        assert np.all(np.array(d["uncertainty_product"]) >= 0.5 - 1e-6)
+
+    async def test_energy_and_turning_points(self, async_client):
+        async with async_client as c:
+            resp = await c.post("/qm/trajectory", json=self.body())
+        d = resp.json()
+
+        assert d["energy"] == pytest.approx(3.625, rel=1e-3)
+        left, right = d["turning_points"]
+        # Released from rest at x0, so it turns around at +/- x0.
+        assert left == pytest.approx(-2.5, abs=0.05)
+        assert right == pytest.approx(2.5, abs=0.05)
+
+    async def test_coherent_width_is_none_for_anharmonic(self, async_client):
+        async with async_client as c:
+            resp = await c.post(
+                "/qm/trajectory",
+                json=self.body(
+                    potential={"type": "double_well", "params": {"a": 1.0, "b": 4.0}},
+                    wavepacket={"x0": 1.4, "k0": 0.0, "sigma": 0.5},
+                    t_max=4.0,
+                ),
+            )
+        assert resp.status_code == 200
+        assert resp.json()["coherent_width"] is None
+
+    async def test_hard_walls_drop_the_classical_comparison(self, async_client):
+        """The infinite well's force is unbounded; report no classical path."""
+        async with async_client as c:
+            resp = await c.post(
+                "/qm/trajectory",
+                json=self.body(
+                    potential={"type": "infinite_well", "params": {"width": 6.0}},
+                    wavepacket={"x0": 0.5, "k0": 1.0, "sigma": 0.5},
+                    t_max=2.0,
+                ),
+            )
+        assert resp.status_code == 200
+        d = resp.json()
+        assert d["classical_position"] is None
+        assert d["turning_points"] is None
+        # The quantum side is unaffected.
+        assert len(d["mean_position"]) == 120
+        assert np.all(np.isfinite(d["mean_position"]))
+
+    async def test_rejects_bad_parameters(self, async_client):
+        async with async_client as c:
+            resp = await c.post("/qm/trajectory", json=self.body(t_max=-1.0))
+        assert resp.status_code == 422
+
+
+class TestEvolveViewWindow:
+    """
+    Solve wide, stream narrow. The grid must outrun the packet so the FFT
+    never wraps it; the window is just what's worth drawing.
+    """
+
+    def request(self, **overrides):
+        body = {
+            "grid": {"x_min": -25, "x_max": 25, "n_points": 2048},
+            "potential": {"type": "harmonic", "params": {"omega": 1.0}},
+            "wavepacket": {"x0": 2.5, "k0": 0.0, "sigma": 0.7071067811865476},
+            "t_max": 3.0,
+            "dt": 0.005,
+            "n_frames": 10,
+        }
+        body.update(overrides)
+        return body
+
+    def run(self, client, body):
+        with client.websocket_connect("/qm/evolve") as ws:
+            ws.send_text(json.dumps(body))
+            metadata = json.loads(ws.receive_text())
+            frames = []
+            while True:
+                msg = json.loads(ws.receive_text())
+                if msg["type"] == "done":
+                    break
+                frames.append(msg)
+        return metadata, frames
+
+    def test_uncropped_streams_the_whole_grid(self, client):
+        metadata, frames = self.run(client, self.request())
+        assert len(metadata["x"]) == 2048
+        assert len(frames[0]["probability_density"]) == 2048
+
+    def test_window_crops_both_metadata_and_frames(self, client):
+        metadata, frames = self.run(client, self.request(view_window=[-5.0, 5.0]))
+
+        n = len(metadata["x"])
+        assert n < 2048
+        assert min(metadata["x"]) >= -5.0
+        assert max(metadata["x"]) <= 5.0
+        assert len(metadata["potential"]) == n
+        for f in frames:
+            assert len(f["probability_density"]) == n
+
+    def test_full_grid_bounds_are_still_reported(self, client):
+        metadata, _ = self.run(client, self.request(view_window=[-5.0, 5.0]))
+        assert metadata["grid_bounds"] == [-25.0, 25.0]
+
+    def test_norm_stays_a_full_grid_integral(self, client):
+        """Cropping the view must not make the packet look like it lost norm."""
+        _, frames = self.run(client, self.request(view_window=[-3.0, 3.0]))
+        for f in frames:
+            assert f["norm"] == pytest.approx(1.0, abs=1e-3)
+
+    def test_cropping_does_not_change_the_physics(self, client):
+        """The solve runs on the full grid either way."""
+        _, wide = self.run(client, self.request())
+        metadata, cropped = self.run(client, self.request(view_window=[-5.0, 5.0]))
+
+        x_full = np.array(json.loads(json.dumps(wide[0]["probability_density"])))
+        # Locate the cropped window inside the full grid and compare pointwise.
+        n = len(metadata["x"])
+        start = int(np.argmin(np.abs(np.linspace(-25, 25, 2048) - metadata["x"][0])))
+        assert np.allclose(
+            x_full[start : start + n], cropped[0]["probability_density"], atol=1e-12
+        )
+
+    def test_rejects_inverted_window(self, client):
+        with pytest.raises(Exception):
+            self.run(client, self.request(view_window=[5.0, -5.0]))
+
+    def test_rejects_window_off_the_grid(self, client):
+        with pytest.raises(Exception):
+            self.run(client, self.request(view_window=[100.0, 200.0]))
+
+
 class TestEvolveWebSocket:
     def test_evolve_metadata_and_frames(self, client):
         with client.websocket_connect("/qm/evolve") as ws:

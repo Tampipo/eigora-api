@@ -5,6 +5,7 @@
 QM router.
 
 POST /qm/eigenstates  — solve time-independent Schrödinger equation
+POST /qm/trajectory   — <x>(t), <p>(t) and spreads for an evolving wavepacket
 WS   /qm/evolve       — stream time evolution frames via WebSocket
 """
 
@@ -15,8 +16,9 @@ from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
 from eigora.grids import GridND
 from eigora.qm import QuantumSystem1D
+from eigora.qm.evolution import classical_trajectory, quantum_trajectory
 from eigora.qm.states.wavepacket import GaussianWavepacket
-from eigora.qm.potentials import RectangularBarrier, SeparablePotential
+from eigora.qm.potentials import HarmonicWell, RectangularBarrier, SeparablePotential
 from eigora.qm.scattering import energy_averaged_transmission
 from eigora.qm.spectra import spectrum_for
 from eigora.qm.states.orbitals import SingleAtomState
@@ -34,6 +36,9 @@ from eigora_api.schemas.qm import (
     MeasurementRequest,
     OutcomeSchema,
     MeasurementResponse,
+    PotentialType,
+    TrajectoryRequest,
+    TrajectoryResponse,
 )
 from eigora_api.utils.potentials import build_potential
 from eigora_api.utils.orbital_mesh import build_orbital_mesh
@@ -223,6 +228,74 @@ def _draw_counts(
     return [int(count) for count in rng.multinomial(n_draws, probabilities)]
 
 
+@router.post("/trajectory", response_model=TrajectoryResponse)
+def trajectory(req: TrajectoryRequest) -> TrajectoryResponse:
+    """
+    Track where a wavepacket is over time.
+
+    Returns <x>(t) and <p>(t) with their spreads, alongside the path a
+    classical point particle would take from the same starting conditions.
+    In a harmonic well the two positions coincide exactly (Ehrenfest's
+    theorem, the force being linear); anywhere else the gap between them is
+    the part of the motion that has no classical counterpart.
+    """
+    grid = GridND.line(req.grid.x_min, req.grid.x_max, req.grid.n_points)
+    try:
+        potential = build_potential(req.potential, grid)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    system = QuantumSystem1D(grid=grid, potential=potential)
+    wavepacket = GaussianWavepacket(
+        x0=req.wavepacket.x0,
+        k0=req.wavepacket.k0,
+        sigma=req.wavepacket.sigma,
+    )
+    evolution = system.evolve(
+        initial_state=wavepacket,
+        t_max=req.t_max,
+        dt=req.dt,
+        n_frames=req.n_frames,
+    )
+    traj = quantum_trajectory(evolution)
+
+    # The classical integrator differentiates V numerically, so it is only
+    # honest on a smooth potential: across a square wall a finite difference
+    # reports zero force and the particle would sail straight through. Offer
+    # the comparison for the smooth potentials and decline for the rest.
+    smooth = req.potential.type in {
+        PotentialType.harmonic,
+        PotentialType.double_well,
+        PotentialType.free,
+    }
+    if smooth:
+        x_cl, p_cl = classical_trajectory(
+            potential, wavepacket.x0, wavepacket.k0, traj.times
+        )
+        classical_ok = bool(np.all(np.isfinite(x_cl)) and np.all(np.isfinite(p_cl)))
+    else:
+        classical_ok = False
+
+    return TrajectoryResponse(
+        times=traj.times.tolist(),
+        mean_position=traj.mean_position.tolist(),
+        mean_momentum=traj.mean_momentum.tolist(),
+        spread_position=traj.spread_position.tolist(),
+        spread_momentum=traj.spread_momentum.tolist(),
+        uncertainty_product=traj.uncertainty_product.tolist(),
+        energy=traj.energy,
+        boundary_leakage=traj.boundary_leakage,
+        classical_position=x_cl.tolist() if classical_ok else None,
+        classical_momentum=p_cl.tolist() if classical_ok else None,
+        turning_points=(
+            [float(x_cl.min()), float(x_cl.max())] if classical_ok else None
+        ),
+        coherent_width=(
+            potential.coherent_width if isinstance(potential, HarmonicWell) else None
+        ),
+    )
+
+
 @router.websocket("/evolve")
 async def evolve(websocket: WebSocket) -> None:
     """
@@ -257,12 +330,24 @@ async def evolve(websocket: WebSocket) -> None:
             mean_energy = 0.5 * wavepacket.k0**2
             mean_energy_transmission = potential.transmission_coefficient(mean_energy)
 
+        # The grid has to be wide enough that nothing reaches its edge, but
+        # only a slice of it is worth sending. Crop the output here; the solve
+        # below still runs on every point.
+        lo, hi = 0, grid.n_points
+        if req.view_window is not None:
+            inside = np.flatnonzero(
+                (grid.x >= req.view_window[0]) & (grid.x <= req.view_window[1])
+            )
+            if inside.size >= 2:
+                lo, hi = int(inside[0]), int(inside[-1]) + 1
+
         # Send metadata first so frontend can set up the canvas
         metadata = EvolveMetadata(
-            x=grid.x.tolist(),
-            potential=potential(grid.x).tolist(),
+            x=grid.x[lo:hi].tolist(),
+            potential=potential(grid.x)[lo:hi].tolist(),
             t_max=req.t_max,
             n_frames=req.n_frames,
+            grid_bounds=[float(grid.x[0]), float(grid.x[-1])],
             predicted_transmission=predicted_transmission,
             mean_energy_transmission=mean_energy_transmission,
         )
@@ -278,11 +363,13 @@ async def evolve(websocket: WebSocket) -> None:
 
         for i in range(evo.n_frames):
             prob = np.abs(evo.psi[i]) ** 2
+            # Norm stays a full-grid integral: it is the check that the run is
+            # sane, and cropping it would just report the visible fraction.
             norm = float(np.trapezoid(prob, grid.x))
             frame = EvolveFrame(
                 frame=i,
                 t=float(evo.times[i]),
-                probability_density=prob.tolist(),
+                probability_density=prob[lo:hi].tolist(),
                 norm=norm,
             )
             await websocket.send_text(json.dumps({"type": "frame", **frame.model_dump()}))
