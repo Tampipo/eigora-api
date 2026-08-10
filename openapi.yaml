@@ -862,6 +862,13 @@ components:
           description: 'Samples along the trajectory. Can be larger than for /evolve:
             a sample here is a handful of numbers, not a full density array.'
           default: 120
+        include_classical:
+          type: boolean
+          title: Include Classical
+          description: Also integrate a classical point particle from (x0, k0) in
+            the same potential and return its path. Rejected for potentials with a
+            step in them, where a finite-difference force is meaningless.
+          default: false
       type: object
       required:
       - potential
@@ -925,10 +932,9 @@ components:
           - type: 'null'
           title: Classical Position
           description: Position of a classical point particle launched from (x0, k0)
-            in the same potential. In a harmonic well this coincides with mean_position
-            exactly -- Ehrenfest's theorem, since the force is linear. None for potentials
-            with a step in them (well, barrier, step), where the force is a delta
-            function that no finite difference can represent.
+            in the same potential, present only when include_classical was set. In
+            a harmonic well it coincides with mean_position exactly -- Ehrenfest's
+            theorem, since the force is linear.
         classical_momentum:
           anyOf:
           - items:
@@ -936,23 +942,7 @@ components:
             type: array
           - type: 'null'
           title: Classical Momentum
-        turning_points:
-          anyOf:
-          - items:
-              type: number
-            type: array
-          - type: 'null'
-          title: Turning Points
-          description: '[x_left, x_right] reached by the classical particle, where
-            V(x) = E.'
-        coherent_width:
-          anyOf:
-          - type: number
-          - type: 'null'
-          title: Coherent Width
-          description: The sigma that would make this packet a coherent state, 1/sqrt(2*omega).
-            Harmonic potential only -- an anharmonic well has no shape-invariant Gaussian,
-            so this is None there.
+          description: Present only when include_classical was set.
       type: object
       required:
       - times
