@@ -441,6 +441,152 @@ class TestDiscreteMeasurement:
         assert resp.status_code == 422
 
 
+class TestDiscreteEvolution:
+    # A five-rung ladder, E_n = n + 1/2. Already diagonal, so the computational
+    # basis is the eigenbasis and c_n(t) is just the n-th amplitude.
+    ENERGIES = [0.5, 1.5, 2.5, 3.5, 4.5]
+    LADDER = {"re": [[e if i == j else 0 for j in range(5)] for i, e in enumerate(ENERGIES)]}
+    # Every energy is a half-odd multiple of 1/2, so the whole state — phases
+    # included — returns to itself after 2*pi/(1/2) = 4*pi.
+    PERIOD = 4 * np.pi
+
+    def body(self, **overrides):
+        return {
+            "hamiltonian": self.LADDER,
+            "state": {"re": [1, 1, 1, 1, 1]},
+            "t_max": self.PERIOD,
+            "n_frames": 64,
+            **overrides,
+        }
+
+    def coefficients(self, data):
+        """The (n_times, dim) complex array the response encodes."""
+        return np.array(
+            [np.array(c["re"]) + 1j * np.array(c["im"]) for c in data["coefficients"]]
+        )
+
+    async def test_shapes_and_energies(self, async_client):
+        async with async_client as c:
+            resp = await c.post("/qm/discrete-evolution", json=self.body())
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["energies"] == pytest.approx(self.ENERGIES)
+        assert len(data["times"]) == 64
+        assert self.coefficients(data).shape == (64, 5)
+
+    async def test_frames_stop_short_of_t_max(self, async_client):
+        """Half-open, so a run over one period loops without a doubled frame."""
+        async with async_client as c:
+            resp = await c.post("/qm/discrete-evolution", json=self.body())
+        times = resp.json()["times"]
+        assert times[0] == 0.0
+        assert times[-1] == pytest.approx(self.PERIOD * 63 / 64)
+
+    async def test_only_the_phases_move(self, async_client):
+        async with async_client as c:
+            resp = await c.post("/qm/discrete-evolution", json=self.body())
+        moduli = np.abs(self.coefficients(resp.json()))
+        assert moduli == pytest.approx(np.full((64, 5), 1 / np.sqrt(5)))
+
+    async def test_each_coefficient_turns_at_its_own_energy(self, async_client):
+        async with async_client as c:
+            resp = await c.post("/qm/discrete-evolution", json=self.body())
+        data = resp.json()
+        coefficients = self.coefficients(data)
+        expected = coefficients[0] * np.exp(
+            -1j * np.outer(data["times"], self.ENERGIES)
+        )
+        assert coefficients == pytest.approx(expected)
+
+    async def test_initial_state_is_normalised(self, async_client):
+        async with async_client as c:
+            resp = await c.post("/qm/discrete-evolution", json=self.body(n_frames=2))
+        first = self.coefficients(resp.json())[0]
+        assert np.sum(np.abs(first) ** 2) == pytest.approx(1.0)
+
+    async def test_initial_phases_are_kept(self, async_client):
+        """i|1> starts a quarter turn ahead of |0>, and stays that way."""
+        async with async_client as c:
+            resp = await c.post("/qm/discrete-evolution", json=self.body(
+                state={"re": [1, 0, 0, 0, 0], "im": [0, 1, 0, 0, 0]},
+            ))
+        first = self.coefficients(resp.json())[0]
+        assert np.angle(first[1]) - np.angle(first[0]) == pytest.approx(np.pi / 2)
+
+    async def test_eigenstate_keeps_its_probabilities(self, async_client):
+        """A stationary state: the phase turns, nothing else does."""
+        async with async_client as c:
+            resp = await c.post("/qm/discrete-evolution", json=self.body(
+                state={"re": [0, 0, 1, 0, 0]},
+            ))
+        coefficients = self.coefficients(resp.json())
+        assert np.abs(coefficients[:, 2]) == pytest.approx(np.ones(64))
+        assert np.abs(np.delete(coefficients, 2, axis=1)) == pytest.approx(np.zeros((64, 4)))
+
+    async def test_a_rotated_hamiltonian_is_diagonalised(self, async_client):
+        """H = sigma_x: the coefficients are amplitudes on |+> and |->, not |0>, |1>."""
+        async with async_client as c:
+            resp = await c.post("/qm/discrete-evolution", json={
+                "hamiltonian": {"re": [[0, 1], [1, 0]]},
+                "state": {"re": [1, 0]},
+                "t_max": 4.0,
+                "n_frames": 16,
+            })
+        data = resp.json()
+        assert data["energies"] == pytest.approx([-1.0, 1.0])
+        # |0> is an even mix of the two eigenstates, so both moduli are 1/sqrt(2)
+        # for the whole run even though the state itself is oscillating.
+        assert np.abs(self.coefficients(data)) == pytest.approx(
+            np.full((16, 2), 1 / np.sqrt(2))
+        )
+
+    async def test_overlap_with_the_all_ones_vector_sums_the_amplitudes(self, async_client):
+        async with async_client as c:
+            resp = await c.post("/qm/discrete-evolution", json=self.body(
+                reference={"re": [1, 1, 1, 1, 1]},
+            ))
+        data = resp.json()
+        overlap = np.array(data["overlap"]["re"]) + 1j * np.array(data["overlap"]["im"])
+        assert overlap.shape == (64,)
+        assert overlap == pytest.approx(np.sum(self.coefficients(data), axis=1))
+
+    async def test_overlap_starts_at_the_norm_of_the_state(self, async_client):
+        """All five in phase at t=0: sqrt(5) times the amplitude of each."""
+        async with async_client as c:
+            resp = await c.post("/qm/discrete-evolution", json=self.body(
+                reference={"re": [1, 1, 1, 1, 1]},
+            ))
+        overlap = resp.json()["overlap"]
+        assert overlap["re"][0] == pytest.approx(np.sqrt(5))
+        assert overlap["im"][0] == pytest.approx(0.0)
+
+    async def test_no_overlap_unless_asked(self, async_client):
+        async with async_client as c:
+            resp = await c.post("/qm/discrete-evolution", json=self.body())
+        assert resp.json()["overlap"] is None
+
+    async def test_non_hermitian_hamiltonian(self, async_client):
+        async with async_client as c:
+            resp = await c.post("/qm/discrete-evolution", json=self.body(
+                hamiltonian={"re": [[0, 1], [0, 0]]},
+                state={"re": [1, 0]},
+            ))
+        assert resp.status_code == 422
+
+    @pytest.mark.parametrize("overrides", [
+        {"state": {"re": [1, 1]}},
+        {"reference": {"re": [1, 1]}},
+        {"state": {"re": [0, 0, 0, 0, 0]}},
+        {"t_max": 0},
+        {"n_frames": 1},
+        {"n_frames": 5000},
+    ])
+    async def test_rejects_bad_parameters(self, async_client, overrides):
+        async with async_client as c:
+            resp = await c.post("/qm/discrete-evolution", json=self.body(**overrides))
+        assert resp.status_code == 422
+
+
 class TestTrajectory:
     OMEGA = 1.0
     PERIOD = 2 * np.pi / OMEGA

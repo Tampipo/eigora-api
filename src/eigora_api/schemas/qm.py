@@ -365,6 +365,88 @@ class MeasurementResponse(BaseModel):
     )
 
 
+# ── Discrete evolution ────────────────────────────────────────────────────────
+
+class DiscreteEvolutionRequest(BaseModel):
+    """
+    Evolution of a state on a finite-dimensional Hilbert space.
+
+    A finite H is diagonalised rather than stepped, so every frame is computed
+    from psi(0) directly: no time step, no accumulating error, and the cost of
+    a long run is the cost of a short one.
+    """
+
+    hamiltonian: ComplexMatrixSchema = Field(
+        description="Hermitian Hamiltonian in the computational basis (hbar = 1)"
+    )
+    state: ComplexVectorSchema = Field(
+        description="Initial state psi(0), computational basis. Normalised server-side."
+    )
+    t_max: float = Field(
+        default=10.0,
+        gt=0,
+        le=1000.0,
+        description=(
+            "Length of the run, in atomic units. The frames span [0, t_max) "
+            "with the endpoint excluded, so a run whose t_max is a recurrence "
+            "time of the spectrum can be played on a loop without a repeated "
+            "frame at the seam."
+        ),
+    )
+    n_frames: int = Field(default=120, ge=2, le=1024, description="Frames to return")
+    reference: ComplexVectorSchema | None = Field(
+        default=None,
+        description=(
+            "A fixed state to project psi(t) onto, in the computational basis. "
+            "Its amplitude comes back in `overlap`. Not normalised, so passing "
+            "the all-ones vector gives the plain sum of the amplitudes."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def check_dimensions(self) -> "DiscreteEvolutionRequest":
+        dim = self.hamiltonian.dim
+        if self.state.dim != dim:
+            raise ValueError(
+                f"state has {self.state.dim} coefficient(s) but the Hamiltonian "
+                f"is {dim}x{dim}"
+            )
+        if self.reference is not None and self.reference.dim != dim:
+            raise ValueError(
+                f"reference has {self.reference.dim} coefficient(s) but the "
+                f"Hamiltonian is {dim}x{dim}"
+            )
+        return self
+
+
+class DiscreteEvolutionResponse(BaseModel):
+    """
+    The state at every frame, read in the energy eigenbasis.
+
+    Only the phases move: |c_n| is fixed by psi(0) and conserved for as long
+    as H is, which is what makes the energy distribution of a state a constant
+    of the motion.
+    """
+
+    times: list[float]
+    energies: list[float] = Field(
+        description="Eigenvalues of the Hamiltonian, ascending — the E_n of the c_n"
+    )
+    coefficients: list[ComplexVectorSchema] = Field(
+        description=(
+            "c_n(t) = <E_n|psi(t)>, one vector per time, its entries ordered by "
+            "ascending energy to match `energies`."
+        )
+    )
+    overlap: ComplexVectorSchema | None = Field(
+        default=None,
+        description=(
+            "<reference|psi(t)>, as a complex series over `times` rather than a "
+            "state — one entry per frame. None unless `reference` was given."
+        ),
+    )
+
+
 # ── Evolution (WebSocket) ─────────────────────────────────────────────────────
 
 class WavepacketSchema(BaseModel):
@@ -547,4 +629,6 @@ __all__ = [
     "MeasurementRequest",
     "OutcomeSchema",
     "MeasurementResponse",
+    "DiscreteEvolutionRequest",
+    "DiscreteEvolutionResponse",
 ]

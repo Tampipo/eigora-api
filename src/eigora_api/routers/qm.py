@@ -4,9 +4,10 @@
 """
 QM router.
 
-POST /qm/eigenstates  — solve time-independent Schrödinger equation
-POST /qm/trajectory   — <x>(t), <p>(t) and spreads for an evolving wavepacket
-WS   /qm/evolve       — stream time evolution frames via WebSocket
+POST /qm/eigenstates         — solve time-independent Schrödinger equation
+POST /qm/trajectory          — <x>(t), <p>(t) and spreads for an evolving wavepacket
+POST /qm/discrete-evolution  — c_n(t) for a state on a finite Hilbert space
+WS   /qm/evolve              — stream time evolution frames via WebSocket
 """
 
 import json
@@ -22,8 +23,18 @@ from eigora.qm.potentials import RectangularBarrier, SeparablePotential
 from eigora.qm.scattering import energy_averaged_transmission
 from eigora.qm.spectra import spectrum_for
 from eigora.qm.states.orbitals import SingleAtomState
-from eigora.qm.discrete import Observable, Outcome, measurement
+from eigora.qm.discrete import (
+    Hamiltonian,
+    Observable,
+    Outcome,
+    measurement,
+    # Aliased: the WebSocket handler at the bottom of this module is also
+    # called `evolve`, and being defined later it would shadow the import.
+    evolve as evolve_discrete,
+)
 from eigora_api.schemas.qm import (
+    DiscreteEvolutionRequest,
+    DiscreteEvolutionResponse,
     EigenstatesRequest,
     EigenstatesResponse,
     EvolveRequest,
@@ -226,6 +237,43 @@ def _draw_counts(
     probabilities = probabilities / probabilities.sum()
     rng = np.random.default_rng(seed)
     return [int(count) for count in rng.multinomial(n_draws, probabilities)]
+
+
+@router.post("/discrete-evolution", response_model=DiscreteEvolutionResponse)
+def discrete_evolution(req: DiscreteEvolutionRequest) -> DiscreteEvolutionResponse:
+    """
+    Evolve a state on a finite Hilbert space, reported in the energy eigenbasis.
+
+    Returns c_n(t) = <E_n|psi(t)> at every frame, alongside the energies those
+    coefficients belong to. Each one keeps its modulus and turns at its own
+    rate, c_n(t) = c_n(0) exp(-i E_n t) — the whole content of the Schrödinger
+    equation once the eigenproblem is solved.
+
+    `reference` additionally projects psi(t) onto a fixed state; with the
+    all-ones vector that is the sum of the amplitudes, which is what adding
+    the individual phasors up gives.
+    """
+    # linspace over a half-open interval: the last frame is one step short of
+    # t_max, so playing the run on a loop does not stutter on a doubled frame.
+    times = np.linspace(0.0, req.t_max, req.n_frames, endpoint=False)
+
+    try:
+        hamiltonian = Hamiltonian(to_array(req.hamiltonian))
+        evolution = evolve_discrete(hamiltonian, to_array(req.state), times)
+        overlap = (
+            to_vector_schema(evolution.overlap(to_array(req.reference)))
+            if req.reference is not None
+            else None
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    return DiscreteEvolutionResponse(
+        times=times.tolist(),
+        energies=hamiltonian.eigenenergies().tolist(),
+        coefficients=[to_vector_schema(c) for c in evolution.coefficients],
+        overlap=overlap,
+    )
 
 
 @router.post("/trajectory", response_model=TrajectoryResponse)
