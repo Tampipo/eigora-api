@@ -20,8 +20,8 @@ Interactive docs: **https://api.eigora.tampipo.fr/docs**
 src/eigora_api/
   main.py              # FastAPI app, CORS, lifespan
   routers/
-    qm.py              # /qm/eigenstates, /qm/separable-state,
-                       # /qm/single-atom-state (POST), /qm/evolve (WebSocket)
+    qm.py              # /v1/qm/eigenstates, /v1/qm/separable-state,
+                       # /v1/qm/single-atom-state (POST), /v1/qm/evolve (WebSocket)
   schemas/
     qm.py              # Pydantic request/response models
   utils/
@@ -58,7 +58,7 @@ docker run -p 8000:8000 -e ALLOWED_ORIGINS=http://localhost:3000 eigora-api
 
 ## API reference
 
-### `POST /qm/eigenstates`
+### `POST /v1/qm/eigenstates`
 
 Solves the time-independent Schrödinger equation and returns eigenstates.
 
@@ -102,7 +102,7 @@ Solves the time-independent Schrödinger equation and returns eigenstates.
 
 ---
 
-### `POST /qm/separable-state`
+### `POST /v1/qm/separable-state`
 
 Returns one eigenstate of a system that separates along x and y — a particle in
 a well in both directions, a 2D trap, or any pair of 1D potentials. Each axis is
@@ -145,13 +145,13 @@ box starts at n=1, an oscillator at n=0) and come back in `label`.
 
 ---
 
-### `WS /qm/evolve`
+### `WS /v1/qm/evolve`
 
 Streams wavepacket time evolution frames.
 
 **Protocol:**
 
-1. Client connects to `ws://host/qm/evolve`
+1. Client connects to `ws://host/v1/qm/evolve`
 2. Client sends `EvolveRequest` as JSON
 3. Server sends `{ "type": "metadata", "x": [...], "potential": [...], ... }`
 4. Server streams `{ "type": "frame", "frame": i, "t": 0.1, "probability_density": [...], "norm": 1.0 }`
@@ -176,7 +176,7 @@ Streams wavepacket time evolution frames.
 import asyncio, websockets, json
 
 async def test():
-    async with websockets.connect("wss://api.eigora.tampipo.fr/qm/evolve") as ws:
+    async with websockets.connect("wss://api.eigora.tampipo.fr/v1/qm/evolve") as ws:
         await ws.send(json.dumps({
             "grid": {"x_min": -20, "x_max": 20, "n_points": 512},
             "potential": {"type": "barrier", "params": {"height": 2.0, "width": 2.0}},

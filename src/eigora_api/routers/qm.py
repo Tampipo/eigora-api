@@ -4,6 +4,8 @@
 """
 QM router.
 
+Mounted at /v1 (see main.py), so paths below are relative to that prefix.
+
 POST /qm/eigenstates         — solve time-independent Schrödinger equation
 POST /qm/trajectory          — <x>(t), <p>(t) and spreads for an evolving wavepacket
 POST /qm/discrete-evolution  — c_n(t) for a state on a finite Hilbert space
