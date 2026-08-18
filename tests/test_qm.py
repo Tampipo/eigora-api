@@ -28,7 +28,7 @@ def client():
 class TestEigenstates:
     async def test_harmonic_oscillator(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/eigenstates", json={
+            resp = await c.post("/v1/qm/eigenstates", json={
                 "grid": {"x_min": -8, "x_max": 8, "n_points": 256},
                 "potential": {"type": "harmonic", "params": {"omega": 1.0}},
                 "n_states": 4,
@@ -41,7 +41,7 @@ class TestEigenstates:
 
     async def test_energies_ascending(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/eigenstates", json={
+            resp = await c.post("/v1/qm/eigenstates", json={
                 "grid": {"x_min": -8, "x_max": 8, "n_points": 256},
                 "potential": {"type": "harmonic", "params": {"omega": 1.0}},
                 "n_states": 4,
@@ -51,7 +51,7 @@ class TestEigenstates:
 
     async def test_harmonic_energy_values(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/eigenstates", json={
+            resp = await c.post("/v1/qm/eigenstates", json={
                 "grid": {"x_min": -8, "x_max": 8, "n_points": 512},
                 "potential": {"type": "harmonic", "params": {"omega": 1.0}},
                 "n_states": 3,
@@ -63,7 +63,7 @@ class TestEigenstates:
 
     async def test_barrier(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/eigenstates", json={
+            resp = await c.post("/v1/qm/eigenstates", json={
                 "grid": {"x_min": -10, "x_max": 10, "n_points": 256},
                 "potential": {"type": "barrier", "params": {"height": 2.0, "width": 1.0}},
                 "n_states": 4,
@@ -75,7 +75,7 @@ class TestEigenstates:
         x = np.linspace(-8, 8, n)
         V = (0.5 * x**2).tolist()
         async with async_client as c:
-            resp = await c.post("/qm/eigenstates", json={
+            resp = await c.post("/v1/qm/eigenstates", json={
                 "grid": {"x_min": -8, "x_max": 8, "n_points": n},
                 "potential": {"type": "custom", "values": V},
                 "n_states": 3,
@@ -86,7 +86,7 @@ class TestEigenstates:
 
     async def test_custom_wrong_size(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/eigenstates", json={
+            resp = await c.post("/v1/qm/eigenstates", json={
                 "grid": {"x_min": -8, "x_max": 8, "n_points": 256},
                 "potential": {"type": "custom", "values": [0.0] * 100},
                 "n_states": 3,
@@ -95,7 +95,7 @@ class TestEigenstates:
 
     async def test_invalid_grid(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/eigenstates", json={
+            resp = await c.post("/v1/qm/eigenstates", json={
                 "grid": {"x_min": 5, "x_max": -5, "n_points": 256},
                 "potential": {"type": "free"},
                 "n_states": 3,
@@ -104,7 +104,7 @@ class TestEigenstates:
 
     async def test_n_states_too_large(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/eigenstates", json={
+            resp = await c.post("/v1/qm/eigenstates", json={
                 "grid": {"x_min": -8, "x_max": 8, "n_points": 256},
                 "potential": {"type": "harmonic"},
                 "n_states": 100,
@@ -132,7 +132,7 @@ class TestSeparableState:
         # A well of width 6 along x and 3 along y, third state along x and
         # fourth along y: 3 lobes across, 4 up.
         async with async_client as c:
-            resp = await c.post("/qm/separable-state", json={
+            resp = await c.post("/v1/qm/separable-state", json={
                 "grid": {"x_min": 0, "x_max": 6, "y_min": 0, "y_max": 3,
                          "nx": 128, "ny": 128},
                 "potential_x": {"type": "infinite_well",
@@ -155,7 +155,7 @@ class TestSeparableState:
 
     async def test_factors_reconstruct_a_normalised_field(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/separable-state", json=self.body(n1=1, n2=2))
+            resp = await c.post("/v1/qm/separable-state", json=self.body(n1=1, n2=2))
         data = resp.json()
         psi = np.outer(data["psi_x"], data["psi_y"])
         dx = data["x"][1] - data["x"][0]
@@ -164,21 +164,21 @@ class TestSeparableState:
 
     async def test_ground_state_has_no_nodes(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/separable-state", json=self.body(n1=0, n2=0))
+            resp = await c.post("/v1/qm/separable-state", json=self.body(n1=0, n2=0))
         data = resp.json()
         inside = np.array(data["psi_x"])[np.abs(data["x"]) < 1.9]
         assert np.all(inside > 0) or np.all(inside < 0)
 
     async def test_square_box_degeneracy(self, async_client):
         async with async_client as c:
-            degenerate = await c.post("/qm/separable-state", json=self.body(n1=0, n2=1))
-            ground = await c.post("/qm/separable-state", json=self.body(n1=0, n2=0))
+            degenerate = await c.post("/v1/qm/separable-state", json=self.body(n1=0, n2=1))
+            ground = await c.post("/v1/qm/separable-state", json=self.body(n1=0, n2=0))
         assert degenerate.json()["degeneracy"] == 2   # (1,2) and (2,1)
         assert ground.json()["degeneracy"] == 1
 
     async def test_isotropic_trap_degeneracy(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/separable-state", json=self.body(
+            resp = await c.post("/v1/qm/separable-state", json=self.body(
                 potential_x=self.HARMONIC, potential_y=self.HARMONIC, n1=1, n2=1,
             ))
         data = resp.json()
@@ -187,7 +187,7 @@ class TestSeparableState:
 
     async def test_axes_may_differ(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/separable-state", json=self.body(
+            resp = await c.post("/v1/qm/separable-state", json=self.body(
                 potential_x=self.HARMONIC,
                 potential_y={"type": "harmonic", "params": {"omega": 2.0}},
                 n1=0, n2=0,
@@ -199,7 +199,7 @@ class TestSeparableState:
     async def test_numerical_axis_is_not_exact(self, async_client):
         # A finite well has no analytic spectrum, so that axis is solved on the grid.
         async with async_client as c:
-            resp = await c.post("/qm/separable-state", json=self.body(
+            resp = await c.post("/v1/qm/separable-state", json=self.body(
                 potential_x=self.HARMONIC,
                 potential_y={"type": "finite_well",
                              "params": {"depth": 10.0, "width": 3.0}},
@@ -212,7 +212,7 @@ class TestSeparableState:
 
     async def test_state_index_beyond_what_was_computed(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/separable-state", json=self.body(
+            resp = await c.post("/v1/qm/separable-state", json=self.body(
                 potential_x=self.HARMONIC,
                 potential_y={"type": "finite_well",
                              "params": {"depth": 10.0, "width": 3.0}},
@@ -226,7 +226,7 @@ class TestSeparableState:
         # numerically solved axis must reproduce the analytic one on y.
         values = (0.5 * np.linspace(-4, 4, 128) ** 2).tolist()
         async with async_client as c:
-            resp = await c.post("/qm/separable-state", json=self.body(
+            resp = await c.post("/v1/qm/separable-state", json=self.body(
                 potential_x={"type": "custom", "values": values},
                 potential_y=self.HARMONIC,
                 n1=1, n2=0, n_states=6,
@@ -239,14 +239,14 @@ class TestSeparableState:
 
     async def test_custom_potential_size_is_validated(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/separable-state", json=self.body(
+            resp = await c.post("/v1/qm/separable-state", json=self.body(
                 potential_x={"type": "custom", "values": [0.0] * 7},
             ))
         assert resp.status_code == 422
 
     async def test_invalid_grid(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/separable-state", json=self.body(
+            resp = await c.post("/v1/qm/separable-state", json=self.body(
                 grid={"x_min": 4, "x_max": -4, "y_min": -4, "y_max": 4,
                       "nx": 128, "ny": 128},
             ))
@@ -254,7 +254,7 @@ class TestSeparableState:
 
     async def test_negative_state_index(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/separable-state", json=self.body(n1=-1))
+            resp = await c.post("/v1/qm/separable-state", json=self.body(n1=-1))
         assert resp.status_code == 422
 
 
@@ -262,7 +262,7 @@ class TestSingleAtomState:
     async def test_hydrogen_1s(self, async_client):
         # 1s is nodeless and everywhere positive: a single +ψ lobe, no −ψ lobe.
         async with async_client as c:
-            resp = await c.post("/qm/single-atom-state", json={
+            resp = await c.post("/v1/qm/single-atom-state", json={
                 "grid": {"x_min": -10, "x_max": 10, "y_min": -10, "y_max": 10,
                          "z_min": -10, "z_max": 10, "nx": 32, "ny": 32, "nz": 32},
                 "Z": 1, "n": 1, "l": 0, "m": 0,
@@ -282,7 +282,7 @@ class TestSingleAtomState:
     async def test_both_lobes_for_p_orbital(self, async_client):
         # 2p_z has a node at theta=pi/2, so ψ takes both signs -> two lobes.
         async with async_client as c:
-            resp = await c.post("/qm/single-atom-state", json={
+            resp = await c.post("/v1/qm/single-atom-state", json={
                 "grid": {"x_min": -10, "x_max": 10, "y_min": -10, "y_max": 10,
                          "z_min": -10, "z_max": 10, "nx": 32, "ny": 32, "nz": 32},
                 "Z": 1, "n": 2, "l": 1, "m": 0,
@@ -296,7 +296,7 @@ class TestSingleAtomState:
 
     async def test_invalid_quantum_numbers(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/single-atom-state", json={
+            resp = await c.post("/v1/qm/single-atom-state", json={
                 "grid": {"nx": 32, "ny": 32, "nz": 32},
                 "Z": 1, "n": 1, "l": 1, "m": 0,  # l must be < n
             })
@@ -304,7 +304,7 @@ class TestSingleAtomState:
 
     async def test_grid_resolution_too_low(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/single-atom-state", json={
+            resp = await c.post("/v1/qm/single-atom-state", json={
                 "grid": {"nx": 8, "ny": 8, "nz": 8},
                 "Z": 1, "n": 1, "l": 0, "m": 0,
             })
@@ -319,7 +319,7 @@ class TestDiscreteMeasurement:
         # |+> = (|0> + |1>)/sqrt(2) is an even superposition of the two
         # sigma_z eigenstates, so both outcomes carry probability 1/2.
         async with async_client as c:
-            resp = await c.post("/qm/discrete-measurement", json={
+            resp = await c.post("/v1/qm/discrete-measurement", json={
                 "state": {"re": [1, 1]},
                 "operator": self.SIGMA_Z,
             })
@@ -333,7 +333,7 @@ class TestDiscreteMeasurement:
 
     async def test_eigenstate_gives_certain_outcome(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/discrete-measurement", json={
+            resp = await c.post("/v1/qm/discrete-measurement", json={
                 "state": {"re": [1, 0]},
                 "operator": self.SIGMA_Z,
             })
@@ -347,7 +347,7 @@ class TestDiscreteMeasurement:
         # (|0> + i|1>)/sqrt(2) is the +1 eigenstate of sigma_y, so the outcome
         # is certain. Ignoring the imaginary part would give 1/2 - 1/2 instead.
         async with async_client as c:
-            resp = await c.post("/qm/discrete-measurement", json={
+            resp = await c.post("/v1/qm/discrete-measurement", json={
                 "state": {"re": [1, 0], "im": [0, 1]},
                 "operator": self.SIGMA_Y,
             })
@@ -361,7 +361,7 @@ class TestDiscreteMeasurement:
         # once with the probability summed over it, and the collapse projects
         # onto the whole subspace rather than onto one basis vector.
         async with async_client as c:
-            resp = await c.post("/qm/discrete-measurement", json={
+            resp = await c.post("/v1/qm/discrete-measurement", json={
                 "state": {"re": [1, 1, 1]},
                 "operator": {"re": [[1, 0, 0], [0, 1, 0], [0, 0, 2]]},
             })
@@ -383,8 +383,8 @@ class TestDiscreteMeasurement:
             "seed": 42,
         }
         async with async_client as c:
-            first = await c.post("/qm/discrete-measurement", json=body)
-            second = await c.post("/qm/discrete-measurement", json=body)
+            first = await c.post("/v1/qm/discrete-measurement", json=body)
+            second = await c.post("/v1/qm/discrete-measurement", json=body)
         assert first.status_code == 200
         counts = [o["count"] for o in first.json()["outcomes"]]
         assert sum(counts) == 1000
@@ -393,7 +393,7 @@ class TestDiscreteMeasurement:
 
     async def test_no_counts_without_n_draws(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/discrete-measurement", json={
+            resp = await c.post("/v1/qm/discrete-measurement", json={
                 "state": {"re": [1, 1]},
                 "operator": self.SIGMA_Z,
             })
@@ -402,7 +402,7 @@ class TestDiscreteMeasurement:
 
     async def test_non_hermitian_operator(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/discrete-measurement", json={
+            resp = await c.post("/v1/qm/discrete-measurement", json={
                 "state": {"re": [1, 0]},
                 "operator": {"re": [[0, 1], [0, 0]]},
             })
@@ -410,7 +410,7 @@ class TestDiscreteMeasurement:
 
     async def test_dimension_mismatch(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/discrete-measurement", json={
+            resp = await c.post("/v1/qm/discrete-measurement", json={
                 "state": {"re": [1, 0, 0]},
                 "operator": self.SIGMA_Z,
             })
@@ -418,7 +418,7 @@ class TestDiscreteMeasurement:
 
     async def test_non_square_operator(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/discrete-measurement", json={
+            resp = await c.post("/v1/qm/discrete-measurement", json={
                 "state": {"re": [1, 0]},
                 "operator": {"re": [[1, 0, 0], [0, -1, 0]]},
             })
@@ -426,7 +426,7 @@ class TestDiscreteMeasurement:
 
     async def test_zero_state(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/discrete-measurement", json={
+            resp = await c.post("/v1/qm/discrete-measurement", json={
                 "state": {"re": [0, 0]},
                 "operator": self.SIGMA_Z,
             })
@@ -434,7 +434,7 @@ class TestDiscreteMeasurement:
 
     async def test_mismatched_re_and_im(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/discrete-measurement", json={
+            resp = await c.post("/v1/qm/discrete-measurement", json={
                 "state": {"re": [1, 0], "im": [0]},
                 "operator": self.SIGMA_Z,
             })
@@ -467,7 +467,7 @@ class TestDiscreteEvolution:
 
     async def test_shapes_and_energies(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/discrete-evolution", json=self.body())
+            resp = await c.post("/v1/qm/discrete-evolution", json=self.body())
         assert resp.status_code == 200
         data = resp.json()
         assert data["energies"] == pytest.approx(self.ENERGIES)
@@ -477,20 +477,20 @@ class TestDiscreteEvolution:
     async def test_frames_stop_short_of_t_max(self, async_client):
         """Half-open, so a run over one period loops without a doubled frame."""
         async with async_client as c:
-            resp = await c.post("/qm/discrete-evolution", json=self.body())
+            resp = await c.post("/v1/qm/discrete-evolution", json=self.body())
         times = resp.json()["times"]
         assert times[0] == 0.0
         assert times[-1] == pytest.approx(self.PERIOD * 63 / 64)
 
     async def test_only_the_phases_move(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/discrete-evolution", json=self.body())
+            resp = await c.post("/v1/qm/discrete-evolution", json=self.body())
         moduli = np.abs(self.coefficients(resp.json()))
         assert moduli == pytest.approx(np.full((64, 5), 1 / np.sqrt(5)))
 
     async def test_each_coefficient_turns_at_its_own_energy(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/discrete-evolution", json=self.body())
+            resp = await c.post("/v1/qm/discrete-evolution", json=self.body())
         data = resp.json()
         coefficients = self.coefficients(data)
         expected = coefficients[0] * np.exp(
@@ -500,14 +500,14 @@ class TestDiscreteEvolution:
 
     async def test_initial_state_is_normalised(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/discrete-evolution", json=self.body(n_frames=2))
+            resp = await c.post("/v1/qm/discrete-evolution", json=self.body(n_frames=2))
         first = self.coefficients(resp.json())[0]
         assert np.sum(np.abs(first) ** 2) == pytest.approx(1.0)
 
     async def test_initial_phases_are_kept(self, async_client):
         """i|1> starts a quarter turn ahead of |0>, and stays that way."""
         async with async_client as c:
-            resp = await c.post("/qm/discrete-evolution", json=self.body(
+            resp = await c.post("/v1/qm/discrete-evolution", json=self.body(
                 state={"re": [1, 0, 0, 0, 0], "im": [0, 1, 0, 0, 0]},
             ))
         first = self.coefficients(resp.json())[0]
@@ -516,7 +516,7 @@ class TestDiscreteEvolution:
     async def test_eigenstate_keeps_its_probabilities(self, async_client):
         """A stationary state: the phase turns, nothing else does."""
         async with async_client as c:
-            resp = await c.post("/qm/discrete-evolution", json=self.body(
+            resp = await c.post("/v1/qm/discrete-evolution", json=self.body(
                 state={"re": [0, 0, 1, 0, 0]},
             ))
         coefficients = self.coefficients(resp.json())
@@ -526,7 +526,7 @@ class TestDiscreteEvolution:
     async def test_a_rotated_hamiltonian_is_diagonalised(self, async_client):
         """H = sigma_x: the coefficients are amplitudes on |+> and |->, not |0>, |1>."""
         async with async_client as c:
-            resp = await c.post("/qm/discrete-evolution", json={
+            resp = await c.post("/v1/qm/discrete-evolution", json={
                 "hamiltonian": {"re": [[0, 1], [1, 0]]},
                 "state": {"re": [1, 0]},
                 "t_max": 4.0,
@@ -542,7 +542,7 @@ class TestDiscreteEvolution:
 
     async def test_overlap_with_the_all_ones_vector_sums_the_amplitudes(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/discrete-evolution", json=self.body(
+            resp = await c.post("/v1/qm/discrete-evolution", json=self.body(
                 reference={"re": [1, 1, 1, 1, 1]},
             ))
         data = resp.json()
@@ -553,7 +553,7 @@ class TestDiscreteEvolution:
     async def test_overlap_starts_at_the_norm_of_the_state(self, async_client):
         """All five in phase at t=0: sqrt(5) times the amplitude of each."""
         async with async_client as c:
-            resp = await c.post("/qm/discrete-evolution", json=self.body(
+            resp = await c.post("/v1/qm/discrete-evolution", json=self.body(
                 reference={"re": [1, 1, 1, 1, 1]},
             ))
         overlap = resp.json()["overlap"]
@@ -562,12 +562,12 @@ class TestDiscreteEvolution:
 
     async def test_no_overlap_unless_asked(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/discrete-evolution", json=self.body())
+            resp = await c.post("/v1/qm/discrete-evolution", json=self.body())
         assert resp.json()["overlap"] is None
 
     async def test_non_hermitian_hamiltonian(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/discrete-evolution", json=self.body(
+            resp = await c.post("/v1/qm/discrete-evolution", json=self.body(
                 hamiltonian={"re": [[0, 1], [0, 0]]},
                 state={"re": [1, 0]},
             ))
@@ -583,7 +583,7 @@ class TestDiscreteEvolution:
     ])
     async def test_rejects_bad_parameters(self, async_client, overrides):
         async with async_client as c:
-            resp = await c.post("/qm/discrete-evolution", json=self.body(**overrides))
+            resp = await c.post("/v1/qm/discrete-evolution", json=self.body(**overrides))
         assert resp.status_code == 422
 
 
@@ -606,7 +606,7 @@ class TestTrajectory:
     async def test_returns_all_series_at_the_right_length(self, async_client):
         async with async_client as c:
             resp = await c.post(
-                "/qm/trajectory",
+                "/v1/qm/trajectory",
                 json=self.body(n_frames=60, include_classical=True),
             )
         assert resp.status_code == 200
@@ -626,7 +626,7 @@ class TestTrajectory:
 
     async def test_mean_position_is_the_classical_cosine(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/trajectory", json=self.body())
+            resp = await c.post("/v1/qm/trajectory", json=self.body())
         d = resp.json()
 
         t = np.array(d["times"])
@@ -634,7 +634,7 @@ class TestTrajectory:
 
     async def test_classical_is_absent_unless_requested(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/trajectory", json=self.body())
+            resp = await c.post("/v1/qm/trajectory", json=self.body())
         d = resp.json()
         assert d["classical_position"] is None
         assert d["classical_momentum"] is None
@@ -643,7 +643,7 @@ class TestTrajectory:
         """With include_classical, the two series agree in a harmonic well."""
         async with async_client as c:
             resp = await c.post(
-                "/qm/trajectory", json=self.body(include_classical=True)
+                "/v1/qm/trajectory", json=self.body(include_classical=True)
             )
         d = resp.json()
 
@@ -653,7 +653,7 @@ class TestTrajectory:
 
     async def test_coherent_state_holds_its_width(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/trajectory", json=self.body())
+            resp = await c.post("/v1/qm/trajectory", json=self.body())
         d = resp.json()
 
         sigma = 1 / np.sqrt(2 * self.OMEGA)
@@ -663,14 +663,14 @@ class TestTrajectory:
     async def test_response_carries_no_derived_extras(self, async_client):
         """The response is the series the request asked for, nothing bolted on."""
         async with async_client as c:
-            resp = await c.post("/qm/trajectory", json=self.body())
+            resp = await c.post("/v1/qm/trajectory", json=self.body())
         assert "turning_points" not in resp.json()
         assert "coherent_width" not in resp.json()
 
     async def test_squeezed_state_breathes(self, async_client):
         async with async_client as c:
             resp = await c.post(
-                "/qm/trajectory",
+                "/v1/qm/trajectory",
                 json=self.body(wavepacket={"x0": 2.5, "k0": 0.0, "sigma": 0.4}),
             )
         d = resp.json()
@@ -682,14 +682,14 @@ class TestTrajectory:
 
     async def test_energy(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/trajectory", json=self.body())
+            resp = await c.post("/v1/qm/trajectory", json=self.body())
         assert resp.json()["energy"] == pytest.approx(3.625, rel=1e-3)
 
     async def test_classical_rejected_for_stepped_potentials(self, async_client):
         """A square wall has no finite-difference force; say so, don't return null."""
         async with async_client as c:
             resp = await c.post(
-                "/qm/trajectory",
+                "/v1/qm/trajectory",
                 json=self.body(
                     potential={"type": "infinite_well", "params": {"width": 6.0}},
                     wavepacket={"x0": 0.5, "k0": 1.0, "sigma": 0.5},
@@ -703,7 +703,7 @@ class TestTrajectory:
     async def test_quantum_series_still_fine_for_stepped_potentials(self, async_client):
         async with async_client as c:
             resp = await c.post(
-                "/qm/trajectory",
+                "/v1/qm/trajectory",
                 json=self.body(
                     potential={"type": "infinite_well", "params": {"width": 6.0}},
                     wavepacket={"x0": 0.5, "k0": 1.0, "sigma": 0.5},
@@ -717,7 +717,7 @@ class TestTrajectory:
 
     async def test_rejects_bad_parameters(self, async_client):
         async with async_client as c:
-            resp = await c.post("/qm/trajectory", json=self.body(t_max=-1.0))
+            resp = await c.post("/v1/qm/trajectory", json=self.body(t_max=-1.0))
         assert resp.status_code == 422
 
 
@@ -740,7 +740,7 @@ class TestEvolveViewWindow:
         return body
 
     def run(self, client, body):
-        with client.websocket_connect("/qm/evolve") as ws:
+        with client.websocket_connect("/v1/qm/evolve") as ws:
             ws.send_text(json.dumps(body))
             metadata = json.loads(ws.receive_text())
             frames = []
@@ -801,7 +801,7 @@ class TestEvolveViewWindow:
 
 class TestEvolveWebSocket:
     def test_evolve_metadata_and_frames(self, client):
-        with client.websocket_connect("/qm/evolve") as ws:
+        with client.websocket_connect("/v1/qm/evolve") as ws:
             ws.send_text(json.dumps({
                 "grid": {"x_min": -20, "x_max": 20, "n_points": 256},
                 "potential": {"type": "barrier", "params": {"height": 2.0, "width": 2.0}},
@@ -831,7 +831,7 @@ class TestEvolveWebSocket:
             assert all(abs(f["norm"] - 1.0) < 0.05 for f in frames)
 
     def test_predicted_transmission_for_barrier(self, client):
-        with client.websocket_connect("/qm/evolve") as ws:
+        with client.websocket_connect("/v1/qm/evolve") as ws:
             ws.send_text(json.dumps({
                 "grid": {"x_min": -20, "x_max": 20, "n_points": 256},
                 "potential": {"type": "barrier", "params": {"height": 5.0, "width": 1.0}},
@@ -856,7 +856,7 @@ class TestEvolveWebSocket:
                 pass
 
     def test_predicted_transmission_none_for_non_barrier(self, client):
-        with client.websocket_connect("/qm/evolve") as ws:
+        with client.websocket_connect("/v1/qm/evolve") as ws:
             ws.send_text(json.dumps({
                 "grid": {"x_min": -20, "x_max": 20, "n_points": 256},
                 "potential": {"type": "harmonic", "params": {"omega": 1.0}},
