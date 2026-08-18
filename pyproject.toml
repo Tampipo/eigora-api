@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "eigora-api"
-version = "0.2.0"
+version = "0.2.1"
 description = "FastAPI backend for the Eigora simulation platform"
 license = "AGPL-3.0-or-later"
 license-files = ["LICENSE"]
