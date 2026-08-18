@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Eigora API
   description: Physics simulation backend for the Eigora platform.
-  version: 0.1.0
+  version: 0.2.0
 paths:
   /v1/qm/eigenstates:
     post:
