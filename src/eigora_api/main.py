@@ -7,11 +7,20 @@ Eigora API — FastAPI application.
 
 import os
 from contextlib import asynccontextmanager
+from importlib.metadata import PackageNotFoundError, version
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from eigora_api.routers import qm
+
+try:
+    __version__ = version("eigora-api")
+except PackageNotFoundError:
+    # Not installed as a package (e.g. running straight from source) --
+    # release-please only ever bumps pyproject.toml, so there's no second
+    # copy of the version to fall back on here.
+    __version__ = "0.0.0"
 
 
 @asynccontextmanager
@@ -23,7 +32,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Eigora API",
         description="Physics simulation backend for the Eigora platform.",
-        version="0.1.0",
+        version=__version__,
         lifespan=lifespan,
     )
 
