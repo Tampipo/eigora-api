@@ -4,7 +4,9 @@
     ".": {
       "release-type": "python",
       "package-name": "eigora-api",
-      "changelog-path": "CHANGELOG.md"
+      "changelog-path": "CHANGELOG.md",
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true
     }
   }
 }
