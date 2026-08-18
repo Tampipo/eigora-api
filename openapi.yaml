@@ -4,7 +4,7 @@ info:
   description: Physics simulation backend for the Eigora platform.
   version: 0.1.0
 paths:
-  /qm/eigenstates:
+  /v1/qm/eigenstates:
     post:
       tags:
       - Quantum Mechanics
@@ -14,7 +14,7 @@ paths:
 
         Accepts either a named potential (Option A) or a custom V(x) array (Option
         B).'
-      operationId: eigenstates_qm_eigenstates_post
+      operationId: eigenstates_v1_qm_eigenstates_post
       requestBody:
         content:
           application/json:
@@ -34,7 +34,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /qm/separable-state:
+  /v1/qm/separable-state:
     post:
       tags:
       - Quantum Mechanics
@@ -49,7 +49,7 @@ paths:
         differ. Each axis is solved analytically when its potential has a known
 
         solution and numerically otherwise; the state is the product of the two.'
-      operationId: separable_state_qm_separable_state_post
+      operationId: separable_state_v1_qm_separable_state_post
       requestBody:
         content:
           application/json:
@@ -69,7 +69,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /qm/single-atom-state:
+  /v1/qm/single-atom-state:
     post:
       tags:
       - Quantum Mechanics
@@ -80,7 +80,7 @@ paths:
 
         Accepts either a named potential (Option A) or a custom V(x) array (Option
         B).'
-      operationId: single_atom_state_qm_single_atom_state_post
+      operationId: single_atom_state_v1_qm_single_atom_state_post
       requestBody:
         content:
           application/json:
@@ -100,7 +100,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /qm/discrete-measurement:
+  /v1/qm/discrete-measurement:
     post:
       tags:
       - Quantum Mechanics
@@ -118,7 +118,7 @@ paths:
         probabilities are exact; `n_draws` additionally samples that distribution
 
         and reports how many draws landed on each outcome.'
-      operationId: discrete_measurement_qm_discrete_measurement_post
+      operationId: discrete_measurement_v1_qm_discrete_measurement_post
       requestBody:
         content:
           application/json:
@@ -138,7 +138,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /qm/discrete-evolution:
+  /v1/qm/discrete-evolution:
     post:
       tags:
       - Quantum Mechanics
@@ -161,7 +161,7 @@ paths:
         all-ones vector that is the sum of the amplitudes, which is what adding
 
         the individual phasors up gives.'
-      operationId: discrete_evolution_qm_discrete_evolution_post
+      operationId: discrete_evolution_v1_qm_discrete_evolution_post
       requestBody:
         content:
           application/json:
@@ -181,7 +181,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /qm/trajectory:
+  /v1/qm/trajectory:
     post:
       tags:
       - Quantum Mechanics
@@ -198,7 +198,7 @@ paths:
         theorem, the force being linear); anywhere else the gap between them is
 
         the part of the motion that has no classical counterpart.'
-      operationId: trajectory_qm_trajectory_post
+      operationId: trajectory_v1_qm_trajectory_post
       requestBody:
         content:
           application/json:
