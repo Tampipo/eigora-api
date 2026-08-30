@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from eigora_api.routers import qm
+from eigora_api.routers import qm, statphys
 
 
 @asynccontextmanager
@@ -39,6 +39,7 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(qm.router, prefix="/v1")
+    app.include_router(statphys.router, prefix="/v1")
 
     return app
 
