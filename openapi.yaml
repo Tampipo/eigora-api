@@ -218,6 +218,147 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /v1/statphys/thermodynamics:
+    post:
+      tags:
+      - Statistical Physics
+      summary: Thermodynamics
+      description: 'Sweep a system in an ensemble over temperature.
+
+
+        The ensemble decides what is reported: a magnetic one adds the
+
+        magnetisation and its susceptibility, an isobaric one the mean volume.
+
+        Asking for a system the ensemble cannot be applied to -- a two-level
+
+        system in a magnetic field, whose levels carry no magnetisation -- is a
+
+        422 rather than a wrong number.'
+      operationId: thermodynamics_v1_statphys_thermodynamics_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ThermodynamicsRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThermodynamicsResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/statphys/coexistence:
+    post:
+      tags:
+      - Statistical Physics
+      summary: Coexistence
+      description: "Solid-gas equilibrium: `mu_crystal = mu_gas` gives the sublimation\
+        \ curve.\n\nThe crystal is `HarmonicMode(omega) ** 3` for the three modes\
+        \ of one atom,\ntimes a single level at `-eps_c` for its binding -- log Z\
+        \ adds over blocks,\nso that shift is exactly the `+beta eps_c` the energy\
+        \ carries. The gas is\nan ideal gas, and equating the two chemical potentials\
+        \ closes it:\n\n    P = (k_B T / Lambda^3) (1 - e^{-beta hbar omega})^3\n\
+        \        exp(-beta (eps_c - 3 hbar omega / 2))"
+      operationId: coexistence_v1_statphys_coexistence_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CoexistenceRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoexistenceResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/statphys/gas:
+    post:
+      tags:
+      - Statistical Physics
+      summary: Gas
+      description: 'Sample a gas of spin-`s` particles and fit its chemical potential.
+
+
+        Occupations are measured by Metropolis, averaged over orbitals of equal
+
+        energy, and fitted to the distribution with `mu` free. The exact `mu` is
+
+        solved separately and returned alongside, so the fit is checked rather
+
+        than trusted.'
+      operationId: gas_v1_statphys_gas_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GasRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GasResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/statphys/gas-sweep:
+    post:
+      tags:
+      - Statistical Physics
+      summary: Gas Sweep
+      description: 'Converged chemical potential at every value of the swept parameter.
+
+
+        The points are independent, so they run in parallel processes -- one
+
+        request instead of a round trip per point, and wall time set by the
+
+        slowest point rather than their sum. Against them come the closed forms
+
+        the simulation never sees: Sommerfeld below the Fermi temperature and
+
+        Maxwell-Boltzmann above it, both for fermions only.'
+      operationId: gas_sweep_v1_statphys_gas_sweep_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GasSweepRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GasSweepResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
 components:
   schemas:
     BarrierParams:
@@ -238,6 +379,67 @@ components:
           default: 0.0
       type: object
       title: BarrierParams
+    CoexistenceRequest:
+      properties:
+        omega:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Omega
+          description: hbar omega / k_B, kelvin
+          default: 90.0
+        cohesion:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Cohesion
+          description: eps_c / k_B, kelvin
+          default: 1066.0
+        mass_amu:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Mass Amu
+          default: 39.948
+        temperatures:
+          $ref: '#/components/schemas/TemperatureRange'
+      type: object
+      title: CoexistenceRequest
+      description: 'Solid-gas equilibrium: an Einstein crystal against an ideal gas.
+
+
+        Defaults are argon: `hbar omega / k_B = 90 K`, and a cohesion energy equal
+
+        to the measured sublimation enthalpy plus the zero point the atom is given
+
+        back, since the slope of `log P` against `1/T` is `eps_c - 3 hbar omega/2`.'
+    CoexistenceResponse:
+      properties:
+        temperatures:
+          items:
+            type: number
+          type: array
+          title: Temperatures
+        chemical_potential:
+          items:
+            type: number
+          type: array
+          title: Chemical Potential
+          description: mu_c, kelvin
+        pressure:
+          items:
+            type: number
+          type: array
+          title: Pressure
+          description: sublimation pressure, pascals
+        latent_heat:
+          type: number
+          title: Latent Heat
+          description: eps_c - 3 hbar omega / 2, kelvin
+      type: object
+      required:
+      - temperatures
+      - chemical_potential
+      - pressure
+      - latent_heat
+      title: CoexistenceResponse
     ComplexMatrixSchema:
       properties:
         re:
@@ -436,6 +638,31 @@ components:
       - wavefunctions
       - n_states
       title: EigenstatesResponse
+    EnsembleSchema:
+      properties:
+        type:
+          $ref: '#/components/schemas/EnsembleType'
+          default: canonical
+        magnetic_field:
+          type: number
+          title: Magnetic Field
+          description: h, magnetic ensemble
+          default: 0.0
+        pressure:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Pressure
+          description: P, isobaric ensemble
+          default: 1.0
+      type: object
+      title: EnsembleSchema
+    EnsembleType:
+      type: string
+      enum:
+      - canonical
+      - magnetic
+      - isobaric
+      title: EnsembleType
     FiniteWellParams:
       properties:
         depth:
@@ -454,6 +681,260 @@ components:
           default: 0.0
       type: object
       title: FiniteWellParams
+    GasRequest:
+      properties:
+        box:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Box
+          description: box edge, nanometres
+          default: 5.0
+        particles:
+          type: integer
+          maximum: 400.0
+          minimum: 1.0
+          title: Particles
+          default: 40
+        spin:
+          type: number
+          maximum: 3.0
+          minimum: 0.0
+          title: Spin
+          default: 0.5
+        temperature:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Temperature
+          description: kelvin
+          default: 1000.0
+        samples:
+          type: integer
+          maximum: 20000.0
+          minimum: 100.0
+          title: Samples
+          default: 1500
+        burn_in_sweeps:
+          type: integer
+          maximum: 5000.0
+          minimum: 0.0
+          title: Burn In Sweeps
+          default: 200
+        seed:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Seed
+      type: object
+      title: GasRequest
+      description: 'A Monte Carlo gas of spin-`s` particles in a periodic cubic box.
+
+
+        The spin fixes both halves: `2s+1` states per orbital, and half-integer
+
+        spin means fermions while integer spin means bosons. That is the
+
+        spin-statistics theorem doing the dispatch rather than the caller being
+
+        asked the same fact twice.'
+    GasResponse:
+      properties:
+        energies:
+          items:
+            type: number
+          type: array
+          title: Energies
+          description: distinct orbital energies, kelvin
+        occupation:
+          items:
+            type: number
+          type: array
+          title: Occupation
+        occupation_error:
+          items:
+            type: number
+          type: array
+          title: Occupation Error
+        distribution:
+          items:
+            type: number
+          type: array
+          title: Distribution
+          description: closed form at the exact mu
+        statistics:
+          type: string
+          title: Statistics
+        fermi_temperature:
+          type: number
+          title: Fermi Temperature
+        chemical_potential_fitted:
+          type: number
+          title: Chemical Potential Fitted
+        chemical_potential_error:
+          type: number
+          title: Chemical Potential Error
+        chemical_potential_exact:
+          type: number
+          title: Chemical Potential Exact
+        orbitals:
+          type: integer
+          title: Orbitals
+        acceptance:
+          type: number
+          title: Acceptance
+      type: object
+      required:
+      - energies
+      - occupation
+      - occupation_error
+      - distribution
+      - statistics
+      - fermi_temperature
+      - chemical_potential_fitted
+      - chemical_potential_error
+      - chemical_potential_exact
+      - orbitals
+      - acceptance
+      title: GasResponse
+      description: 'Sampled occupations, and the closed form they are checked against.
+
+
+        `chemical_potential_fitted` is what the simulation alone can give: a least
+
+        squares fit of the distribution to the measured occupations. It is
+
+        reported beside the exact value so the two can be compared rather than one
+
+        standing in for the other.'
+    GasSweepPoint:
+      properties:
+        temperature:
+          type: number
+          title: Temperature
+        particles:
+          type: integer
+          title: Particles
+        fermi_temperature:
+          type: number
+          title: Fermi Temperature
+        chemical_potential_fitted:
+          type: number
+          title: Chemical Potential Fitted
+        chemical_potential_error:
+          type: number
+          title: Chemical Potential Error
+        chemical_potential_exact:
+          type: number
+          title: Chemical Potential Exact
+        sommerfeld:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Sommerfeld
+          description: Ef[1 - (pi^2/12)(T/Tf)^2], fermions only
+        maxwell_boltzmann:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Maxwell Boltzmann
+          description: the classical limit, fermions only
+      type: object
+      required:
+      - temperature
+      - particles
+      - fermi_temperature
+      - chemical_potential_fitted
+      - chemical_potential_error
+      - chemical_potential_exact
+      title: GasSweepPoint
+    GasSweepRequest:
+      properties:
+        box:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Box
+          description: box edge, nanometres
+          default: 5.0
+        spin:
+          type: number
+          maximum: 3.0
+          minimum: 0.0
+          title: Spin
+          default: 0.5
+        vary:
+          type: string
+          enum:
+          - temperature
+          - particles
+          title: Vary
+          default: temperature
+        values:
+          items:
+            type: number
+          type: array
+          maxItems: 24
+          minItems: 1
+          title: Values
+        particles:
+          type: integer
+          maximum: 400.0
+          minimum: 1.0
+          title: Particles
+          description: fixed when varying T
+          default: 40
+        temperature:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Temperature
+          description: fixed when varying N
+          default: 1000.0
+        samples:
+          type: integer
+          maximum: 8000.0
+          minimum: 100.0
+          title: Samples
+          default: 800
+        burn_in_sweeps:
+          type: integer
+          maximum: 5000.0
+          minimum: 0.0
+          title: Burn In Sweeps
+          default: 150
+        seed:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Seed
+      type: object
+      required:
+      - values
+      title: GasSweepRequest
+      description: 'Many converged chains, one per value of the swept parameter.
+
+
+        `vary` picks which axis: temperature at fixed particle number, or particle
+
+        number at fixed temperature. Points are independent, so they run in
+
+        parallel processes.'
+    GasSweepResponse:
+      properties:
+        vary:
+          type: string
+          title: Vary
+        statistics:
+          type: string
+          title: Statistics
+        points:
+          items:
+            $ref: '#/components/schemas/GasSweepPoint'
+          type: array
+          title: Points
+      type: object
+      required:
+      - vary
+      - statistics
+      - points
+      title: GasSweepResponse
     Grid2DSchema:
       properties:
         x_min:
@@ -963,6 +1444,182 @@ components:
           default: 0.0
       type: object
       title: StepParams
+    SystemSchema:
+      properties:
+        type:
+          $ref: '#/components/schemas/SystemType'
+          default: two_level
+        splitting:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Splitting
+          description: two_level gap
+          default: 1.0
+        omega:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Omega
+          description: harmonic frequency
+          default: 1.0
+        spin:
+          type: number
+          minimum: 0.0
+          title: Spin
+          description: spin quantum number j
+          default: 0.5
+        rotational_constant:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Rotational Constant
+          description: rotor b
+          default: 1.0
+        particles:
+          type: integer
+          minimum: 0.0
+          title: Particles
+          description: ideal_gas particle count
+          default: 1
+        volume:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Volume
+          description: ideal_gas volume
+          default: 100.0
+        copies:
+          type: integer
+          maximum: 5000.0
+          minimum: 1.0
+          title: Copies
+          default: 1
+      type: object
+      title: SystemSchema
+      description: 'One subsystem, optionally repeated.
+
+
+        `copies` is a tensor product of *distinguishable* copies, so N spins are
+
+        `spin` with `copies = N`. Indistinguishable particles are a different
+
+        construction and are not reachable from here.'
+    SystemType:
+      type: string
+      enum:
+      - two_level
+      - harmonic
+      - spin
+      - rotor
+      - ideal_gas
+      title: SystemType
+    TemperatureRange:
+      properties:
+        minimum:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Minimum
+          default: 0.1
+        maximum:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Maximum
+          default: 10.0
+        points:
+          type: integer
+          maximum: 400.0
+          minimum: 2.0
+          title: Points
+          default: 80
+        logarithmic:
+          type: boolean
+          title: Logarithmic
+          default: true
+      type: object
+      title: TemperatureRange
+    ThermodynamicsRequest:
+      properties:
+        system:
+          $ref: '#/components/schemas/SystemSchema'
+        ensemble:
+          $ref: '#/components/schemas/EnsembleSchema'
+        temperatures:
+          $ref: '#/components/schemas/TemperatureRange'
+      type: object
+      title: ThermodynamicsRequest
+    ThermodynamicsResponse:
+      properties:
+        temperatures:
+          items:
+            type: number
+          type: array
+          title: Temperatures
+        energy:
+          items:
+            type: number
+          type: array
+          title: Energy
+        heat_capacity:
+          items:
+            type: number
+          type: array
+          title: Heat Capacity
+        entropy:
+          items:
+            type: number
+          type: array
+          title: Entropy
+        potential:
+          items:
+            type: number
+          type: array
+          title: Potential
+        potential_name:
+          type: string
+          title: Potential Name
+        magnetisation:
+          anyOf:
+          - items:
+              type: number
+            type: array
+          - type: 'null'
+          title: Magnetisation
+        susceptibility:
+          anyOf:
+          - items:
+              type: number
+            type: array
+          - type: 'null'
+          title: Susceptibility
+        volume:
+          anyOf:
+          - items:
+              type: number
+            type: array
+          - type: 'null'
+          title: Volume
+        states:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: States
+          description: Total microstates, null if unbounded
+      type: object
+      required:
+      - temperatures
+      - energy
+      - heat_capacity
+      - entropy
+      - potential
+      - potential_name
+      title: ThermodynamicsResponse
+      description: 'Everything one sweep yields, per temperature.
+
+
+        `potential_name` says which thermodynamic potential `potential` is: the
+
+        Helmholtz free energy canonically, the Gibbs energy once volume is free,
+
+        and so on. Both are floats, so reporting one as the other is an error
+
+        nothing downstream would catch.'
     TrajectoryRequest:
       properties:
         grid:
