@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.2](https://github.com/Tampipo/eigora-api/compare/v0.2.1...v0.2.2) (2026-08-30)
+
+
+### Features
+
+* add statphys routes and schemas ([9fb6b49](https://github.com/Tampipo/eigora-api/commit/9fb6b49cba7666efd8e1ff3ee23904d2eb62bb20))
+* add statphys routes and schemas ([429f276](https://github.com/Tampipo/eigora-api/commit/429f27621784b73e7c8eabd63aa2700401371ad9))
+
 ## [0.2.1](https://github.com/Tampipo/eigora-api/compare/v0.2.0...v0.2.1) (2026-08-18)
 
 
