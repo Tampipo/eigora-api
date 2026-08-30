@@ -12,7 +12,7 @@ from importlib.metadata import PackageNotFoundError, version
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from eigora_api.routers import qm
+from eigora_api.routers import qm, statphys
 
 try:
     __version__ = version("eigora-api")
@@ -48,6 +48,7 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(qm.router, prefix="/v1")
+    app.include_router(statphys.router, prefix="/v1")
 
     return app
 
