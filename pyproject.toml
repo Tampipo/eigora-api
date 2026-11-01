@@ -16,7 +16,7 @@ dependencies = [
     "websockets>=13.0",
     "pyyaml>=6.0",
     "scikit-image>=0.24",
-    "eigora @ git+https://github.com/Tampipo/eigora",
+    "eigora @ git+https://github.com/Tampipo/eigora@v0.1.1",
 ]
 
 [project.optional-dependencies]
