@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.3](https://github.com/Tampipo/eigora-api/compare/v0.2.2...v0.2.3) (2026-11-01)
+
+
+### Bug Fixes
+
+* pin eigora to v0.1.1 ([5a528d4](https://github.com/Tampipo/eigora-api/commit/5a528d48b3589e688a2fe56bc727d1e71f7bf0bc))
+* pin eigora to v0.1.1 ([015c2a1](https://github.com/Tampipo/eigora-api/commit/015c2a139cba65ca16b8b6b1a3cdc6349f378ce5))
+
 ## [0.2.2](https://github.com/Tampipo/eigora-api/compare/v0.2.1...v0.2.2) (2026-08-30)
 
 
